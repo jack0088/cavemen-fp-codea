@@ -517,7 +517,9 @@ end
 
 
 function world:drawAtlasWindow()
-    self:restrictAtlasWindowHeight()
+    self:pullAtlasWindowHeightOverflow()
+    self:pullAtlasIntoAtlasWindowBounds()
+    
     local window_height = HEIGHT * self.atlas_window_height
     
     -- background
@@ -802,9 +804,36 @@ end
 
 
 
+function world:pullAtlasIntoAtlasWindowBounds()
+    local atlas_width = self.atlas_texture.width * self.atlas_zoom_x
+    
+    if ( -- atlas_texture.width smaller than WIDTH?
+        atlas_width < WIDTH
+        and (self.atlas_x <= 0 or self.atlas_x >= WIDTH or self.atlas_x + atlas_width <= 0 or self.atlas_x + atlas_width >= WIDTH)
+    )
+    or ( -- atlas_texture.width larger than WIDTH?
+        atlas_width > WIDTH
+        and (self.atlas_x > 0 or self.atlas_x + atlas_width < WIDTH)
+    )
+    then
+        self.atlas_x = 0
+    end
+end
 
 
-function world:restrictAtlasWindowHeight()
+
+
+
+
+
+
+
+
+
+
+
+
+function world:pullAtlasWindowHeightOverflow()
     local window_height = HEIGHT * self.atlas_window_height
     local atlas_height = self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height
     

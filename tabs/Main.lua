@@ -45,8 +45,8 @@ function setup()
             and touch.y > self.y and touch.y < self.y + self.height
             then
                 self.callback()
+                self.is_active = not self.is_active
             end
-            self.is_active = not self.is_active
         end
     end
 end
