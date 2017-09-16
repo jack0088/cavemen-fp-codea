@@ -1,167 +1,207 @@
-World = {}
-World.ui = {}
-World.sfx = {}
-World.brush = {}
-World.atlas = {}
-World.layer = {}
-World.camera = {}
-World.debug = false
 
-function World:init(properties)
-    self.texture = readImage("Dropbox:cavemen_spritesheet")
-    
-    self.tileWidth = 8
-    self.tileHeight = 8
-    self.chunkWidth = 8
-    self.chunkHeight = 8
-    
-    self.brush.x = 0
-    self.brush.y = 0
-    
-    self.atlas.x = 0
-    self.atlas.y = 0
-    self.atlas.scaleX = 6
-    self.atlas.scaleY = 6
-    
-    self.layer.y = 0
-    self.layer.list = {1,2,5,999}
-    self.layer.property = properties or {}
-    
-    self.camera.x = 0
-    self.camera.y = 0
-    self.camera.scaleX = 8
-    self.camera.scaleY = 8
-    
-    self.map = {{x = -1, y = 0}, {x = -2, y = -2}}
-    
-    self.ui.checkboxSize = 24
-    self.ui.checkboxMargin = 4
-    self.ui.layerWindowWidth = self.ui.checkboxSize + 2*self.ui.checkboxMargin + textSize(self.layer.list[#self.layer.list])
-    self.ui.titleBarHeight = 32
-    self.ui.atlasWindowHeight = math.min(self.atlas.scaleY * self.texture.height + self.ui.titleBarHeight, HEIGHT/4)
-    
-    self.sfx.action = {SOUND_RANDOM, 6653}
-    self.sfx.selection = {DATA, "ZgBAQABlQEBAP0BAAAAAAHuYhT4qLhk/fwBAf0BAQEBAQEA+"}
-    
-    self.gestureTimer = .33
-end
 
-function World:finish()
-end
+world = {}
 
-function World.camera:center()
-    if World.debug then
-        self.pivotX = (WIDTH  - World.ui.layerWindowWidth) / WIDTH/2
-        self.pivotY = (HEIGHT - World.ui.atlasWindowHeight - World.ui.titleBarHeight) / HEIGHT/2 + World.ui.atlasWindowHeight / HEIGHT
-    else
-        self.pivotX = .5
-        self.pivotY = .5
+
+
+world.debug = true
+
+world.level_file_path = nil
+
+world.camera_x = 0
+world.camera_y = 0
+world.camera_zoom_x = 8
+world.camera_zoom_y = 8
+world.camera_pivot_x = .5
+world.camera_pivot_y = .5
+
+world.atlas_texture = readImage("Dropbox:cavemen_spritesheet")
+world.atlas_x = 0
+world.atlas_y = 0
+world.atlas_zoom_x = 6
+world.atlas_zoom_y = 6
+
+world.tile_width = 8
+world.tile_height = 8
+world.chunk_width = 8 -- in tiles
+world.chunk_height = 8
+
+world.brush_x = 0 -- in tiles
+world.brush_y = 0
+world.brush_width = 1 -- in tiles
+world.brush_height = 1
+
+world.map = {}
+
+world.layer_list = {}
+world.layer_scroll = 0
+
+world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
+
+world.title_bar_height = 32
+world.atlas_window_height = .25 -- as percentage multiplier
+world.layer_window_width = .1 -- as percentage multiplier
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Center camera pivot inside available screen space
+
+function world:centerCameraPivot()
+    if self.debug then
+        self.camera_pivot_x = (WIDTH  - self.layer_window_width) / WIDTH/2
+        self.camera_pivot_y = (HEIGHT - self.atlas_window_height - self.title_bar_height) / HEIGHT/2 + self.atlas_window_height / HEIGHT
+        return
     end
+    
+    self.pivotX = .5
+    self.pivotY = .5
 end
 
-function World.camera:getWorldPosition(x, y)
+
+
+
+
+
+
+
+
+
+
+
+-- Convert screen coordinates to world coordinates
+
+function world:getWorldPosition(screen_x, screen_y)
     return
-        (x + self.x - self.pivotX * WIDTH) / self.scaleX,
-        (y + self.y - self.pivotY * HEIGHT) / self.scaleY
+        (screen_x + self.camera_x - self.camera_pivot_x * WIDTH) / self.camera_zoom_x,
+        (screen_y + self.camera_y - self.camera_pivot_y * HEIGHT) / self.camera_zoom_y
 end
 
-function World.camera:getScreenPosition(x, y)
-    local pntX = self.scaleX * x - self.x + self.pivotX * WIDTH
-    local pntY = self.scaleY * y - self.y + self.pivotY * HEIGHT
+
+
+
+
+
+
+
+
+
+
+-- Convert world coordinates to screen coordinates
+
+function world:getScreenPosition(world_x, world_y)
+    local pnt_x = self.camera_zoom_x * world_x - self.camera_x + self.camera_pivot_x * WIDTH
+    local pnt_y = self.camera_zoom_y * world_y - self.camera_y + self.camera_pivot_y * HEIGHT
+    local is_inside = pnt_x > 0 and pnt_x < WIDTH and pnt_y > 0 and pnt_y < HEIGHT
     return
         pntX,
         pntY,
-        pntX > 0 and pntX < WIDTH and pntY > 0 and pntY < HEIGHT
+        is_inside
 end
 
-function World.camera:getTile(x, y)
-    -- pass in world position (e.g. player)
-    -- from this we can get the chunk position
-    -- then calculate which tile it is in this chunk
-    -- finally return tile index
+
+
+
+
+
+
+
+
+
+
+-- Calculate by how many tiles and chunks the camera has been moved
+ 
+function world:getCameraOffset()
+    local tiles_x = math.floor(self.camera_x / (self.camera_zoom_x * self.tile_width))
+    local tiles_y = math.floor(self.camera_y / (self.camera_zoom_y * self.tile_height))
+    local chunks_x = tiles_x * self.chunk_width
+    local chunks_y = tiles_y * self.chunk_height
+    return
+        tiles_x,
+        tiles_y,
+        chunks_x,
+        chunks_y
 end
 
-function World.camera:setTile(x, y, id)
-    -- pass in world position (e.g. player)
-    -- from this we can get the chunk
-    -- then calculate the corresponding tile
-    -- and finally change its index to the new id
-end
 
-function World.layer:create(flag)
-    table.insert(self.list, {name = flag, hidden = false})
-    table.sort(self.list, function(obj, list) return obj.name < list.name end)
-end
 
-function World.layer:delete(flag)
-    table.remove(self.list, self:getId(flag))
-end
 
-function World.layer:getId(flag)
-    local index
-    for id, layer in ipairs(self.list) do
-        if layer.name == flag then
-            index = id
-            break
-        end
-    end
-    return index
-end
 
-function World:unload(chunks)
-    for _, chunk in ipairs(chunks) do
-        for id, list in ipairs(self.map) do
-            -- Chunk:Chunk comparison
-            if list.width == chunk.width and list.height == chunk.height then
-                if list.x == chunk.x and list.y == chunk.y then
-                    table.remove(self.map, id)
-                end
-            else
-            -- Chunk:Tile comparison
-                -- TODO: list.x, list.y arent in the same world space as chunk.x and chunk.y
-                if list.x > chunk.x and list.x < chunk.x + chunk.width
-                and list.y > chunk.y and list.y < chunk.y + chunk.height
-                then
-                    if list.finish then list:finish() end
-                    table.remove(self.map, id)
-                end
-            end
-        end
-    end
-end
 
-function World:load(chunks)
-    for _, chunk in ipairs(chunks) do
-        for _, layer in ipairs(self.layer.list) do
-            local layerRegion = {layer = layer, chunk = chunk, tile = {}}
-            
-            for y = 1, self.chunkHeight do
-                for x = 1, self.chunkWidth do
-                    local tileX = self.chunkWidth * chunk.x + x - 1
-                    local tileY = self.chunkHeight * chunk.y + y - 1
-                    local tileId = readProjectData(tileX.." "..tileY.." "..layer)
-                    
-                    if tileId then
-                        tileId = vec2(tileId:match("(%S+)%s(%S)"))
-                        table.insert(layerRegion.tile, {x = tileX, y = tileY, relativeX = x, relativeY = y, id = tileId})
-                    end
-                end
-            end
-            
-            if #layerRegion.tile > 0 then
-                self:setup(layerRegion)
-            end
-        end
-    end
-end
 
-function World:render(region)
-    local canvas = image(region.chunk.width, region.chunk.height)
-    local mask = mesh()
-    mask.texture = self.texture
-    mask:addRect(self.tileWidth/2, self.tileHeight/2, self.tileWidth, self.tileHeight)
+
+
+
+
+
+
+
+-- Calculate positions of visible tiles and chunks
+
+function world:getCameraVisibles()
     
-    setContext(canvas)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:getAtlasTileIndex(x, y)
+    local window_height = HEIGHT * self.atlas_window_height - self.title_bar_height
+    local tile_width = self.tile_width * self.atlas_zoom_x
+    local tile_height = self.tile_height * self.atlas_zoom_y
+    local tile_id_x = math.floor((x - self.atlas_x) / tile_width)
+    local tile_id_y = math.floor((window_height - y + self.atlas_y) / tile_height)
+    return
+        tile_id_x,
+        tile_id_y
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- (Re-)render visible tiles into certain chunks
+
+function world:renderChunk(world_x, world_y)
+    local canvas = mesh()
+    canvas.texture = image(self.chunk_width, self.chunk_height)
+    canvas:addRect(self.tileWidth/2, self.tileHeight/2, self.tileWidth, self.tileHeight)
+    
+    setContext(canvas.texture)
     pushMatrix()
     resetMatrix()
     translate(-(self.tileWidth * self.chunkWidth * region.chunk.x), -(self.tileHeight * self.chunkHeight * region.chunk.y))
@@ -172,396 +212,632 @@ function World:render(region)
     
     setContext()
     popMatrix()
+    
     return canvas
 end
 
-function World:setup(region)
-    if self.layer.property[region.layer] then
-        for _, tile in ipairs(region.tile) do
-            -- setup as separate object
-        end
-    else
-        local object = mesh()
-        object.x = self.tileWidth * self.chunkWidth * region.chunk.x
-        object.x = self.tileHeight * self.chunkHeight * region.chunk.y
-        object.width = region.chunk.width
-        object.height = region.chunk.height
-        object.texture = self:render(region)
-        object:addRect(object.width/2, object.height/2, object.width, object.height)
-        table.insert(self.map, object)
-    end
-end
 
-function World:save()
-end
 
-function World:orientationChanged(screen)
-    self.camera:center()
-end
 
-function World:update()
-    -- Update touch flags
-    if self._useMapWindow
-    and self._useMapWindow + self.gestureTimer < ElapsedTime
-    and not self._brushMapWindow
-    then
-        self._scrollMapWindow = true
-    end
-    
-    if self._useAtlasWindow
-    and self._useAtlasWindow + self.gestureTimer < ElapsedTime
-    and not self._scrollAtlasWindow
-    then
-        self._resizeBrush = true
-    end
-    
-    -- Track visible chunks
-    local chunkWidth, chunkHeight = self.tileWidth * self.chunkWidth, self.tileHeight * self.chunkHeight
-    local leftBottomX, leftBottomY = self.camera:getWorldPosition(0, 0)
-    local leftBottomChunk = vec2(math.floor(leftBottomX / chunkWidth), math.floor(leftBottomY / chunkHeight))
-    
-    if (not self._referenceChunk
-    or self._referenceChunk ~= leftBottomChunk)
-    and not self._scrollMapWindow
-    then
-        -- TODO: maybe we have to offset some sides by chunkWidth or chunkHeight
-        -- Collect positions for old and new chunks
-        local cameraDirection = leftBottomChunk - (self._referenceChunk or leftBottomChunk)
-        local rightTopX, rightTopY = self.camera:getWorldPosition(WIDTH, HEIGHT)
-        local rightTopChunk = vec2(math.floor(rightTopX / chunkWidth), math.floor(rightTopY / chunkHeight))
-        local whitelist = {}
-        local blacklist = {}
-        
-        -- Init map
-        if not self._referenceChunk then
-            for x = leftBottomChunk.x, rightTopChunk.x do
-                for y = leftBottomChunk.y, rightTopChunk.y do
-                    table.insert(whitelist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                end
-            end
-        else
-        -- Continuously update map
-            -- Check left screen side
-            for x = leftBottomChunk.x - math.abs(cameraDirection.x), leftBottomChunk.x do
-                for y = leftBottomChunk.y, rightTopChunk.y do
-                    -- camera moved left
-                    if cameraDirection.x < 0 then
-                        table.insert(whitelist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    else
-                        -- camera moved right
-                        table.insert(blacklist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    end
-                end
-            end
-            
-            -- Check right screen side
-            for x = rightTopChunk.x, rightTopChunk.x + math.abs(cameraDirection.x) do
-                for y = leftBottomChunk.y, rightTopChunk.y do
-                    -- camera moved right
-                    if cameraDirection.x > 0 then
-                        table.insert(whitelist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    else
-                        -- camera moved left
-                        table.insert(blacklist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    end
-                end
-            end
-            
-            -- Check top screen side
-            for x = leftBottomChunk.x, rightTopChunk.x do
-                for y = rightTopChunk.y, rightTopChunk.y + math.abs(cameraDirection.y) do
-                    -- camera moved up
-                    if cameraDirection.y > 0 then
-                        table.insert(whitelist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    else
-                        -- camera moved down
-                        table.insert(blacklist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    end
-                end
-            end
-            
-            -- Check bottom screen side
-            for x = leftBottomChunk.x, rightTopChunk.x do
-                for y = leftBottomChunk.y - math.abs(cameraDirection.y), leftBottomChunk.y do
-                    -- camera moved down
-                    if cameraDirection.y < 0 then
-                        table.insert(whitelist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    else
-                        -- camera moved up
-                        table.insert(blacklist, {x = x, y = y, width = chunkWidth, height = chunkHeight})
-                    end
-                end
-            end
-        end
-        
-        self._referenceChunk = leftBottomChunk
-        self:unload(blacklist)
-        self:load(whitelist)
-        
-        --print(#whitelist)
-        --printf(whitelist)
-    end
-    
-    -- Coroutine threads
-    --
-end
 
-function World:draw()
+
+
+
+
+
+
+
+
+
+
+-- Draw grid to visualize tiles and chunks inside the map viewport
+
+function world:drawMapGrid()
+    local opacity = self:mapIsPanning() and 255 or 64
+    
+    local tile_width = self.camera_zoom_x * self.tile_width
+    local tile_height = self.camera_zoom_y * self.tile_height
+    local chunk_width = tile_width * self.chunk_width
+    local chunk_height = tile_height * self.chunk_height
+    
+    local grid_scroll_x = self.camera_x % tile_width
+    local grid_scroll_y = self.camera_y % tile_height
+    local chunk_scroll_x = self.camera_x % chunk_width
+    local chunk_scroll_y = self.camera_y % chunk_height
+    
+    
     pushMatrix()
-    pushStyle()
-    noSmooth()
+    translate((self.camera_pivot_x * WIDTH) % tile_width, (self.camera_pivot_y * HEIGHT) % tile_height)
     
-    self:update()
-    
-    -- Map
-    translate(self.camera.pivotX * WIDTH - self.camera.x, self.camera.pivotY * HEIGHT - self.camera.y)
-    scale(self.camera.scaleX, self.camera.scaleY)
-    
-    --draw map here!
-    
-    -- Developer tools
-    if self.debug then
-        pushStyle()
-        font("Futura-CondensedMedium")
-        fontSize(18)
-        
-        -- Show grid
-        do
-            local gridOpacity = self._scrollMapWindow and 255 or 64
-            local tileWidth = self.camera.scaleX * self.tileWidth
-            local tileHeight = self.camera.scaleY * self.tileHeight
-            local chunkWidth = tileWidth * self.chunkWidth
-            local chunkHeight = tileHeight * self.chunkHeight
-            
-            local gridScrollX = self.camera.x % tileWidth
-            local gridScrollY = self.camera.y % tileHeight
-            local chunkScrollX = self.camera.x % chunkWidth
-            local chunkScrollY = self.camera.y % chunkHeight
-            
-            resetMatrix()
-            translate((self.camera.pivotX * WIDTH) % tileWidth, (self.camera.pivotY * HEIGHT) % tileHeight)
-            
-            for x = -tileWidth, WIDTH, tileWidth do
-                noFill()
-                strokeWidth(2)
-                stroke(33, 33, 33, gridOpacity)
-                line(x - gridScrollX + 1, -tileHeight, x - gridScrollX + 1, HEIGHT)
-                strokeWidth(1)
-                stroke(96, 88, 79, gridOpacity)
-                line(x - gridScrollX, -tileHeight, x - gridScrollX, HEIGHT)
-            end
-            
-            for y = -tileHeight, HEIGHT, tileHeight do
-                strokeWidth(2)
-                stroke(33, 33, 33, gridOpacity)
-                line(-tileWidth, y - gridScrollY - 1, WIDTH, y - gridScrollY - 1)
-                strokeWidth(1)
-                stroke(96, 88, 79, gridOpacity)
-                line(-tileWidth, y - gridScrollY, WIDTH, y - gridScrollY)
-            end
-            
-            resetMatrix()
-            translate((self.camera.pivotX * WIDTH) % chunkWidth, (self.camera.pivotY * HEIGHT) % chunkHeight)
-            
-            -- Display chunks
-            for x = 0, WIDTH, chunkWidth do
-                for y = 0, HEIGHT, chunkHeight do
-                    noStroke()
-                    fill(33, 33, 33, gridOpacity)
-                    ellipse(x - chunkScrollX, y - chunkScrollY, 20)
-                    noFill()
-                    strokeWidth(2)
-                    stroke(250, 162, 27, gridOpacity)
-                    ellipse(x - chunkScrollX, y - chunkScrollY, 15)
-                end
-            end
-        end
-        
-        -- Show layers
-        resetMatrix()
-        translate(WIDTH - self.ui.layerWindowWidth, 0)
-        
-        noStroke()
-        fill(33)
-        rectMode(CORNER)
-        rect(0, 0, self.ui.layerWindowWidth, HEIGHT)
-        
-        translate(self.ui.checkboxMargin, HEIGHT - self.ui.titleBarHeight - self.ui.checkboxSize - self.ui.checkboxMargin + self.layer.y)
-        
-        for id, layer in ipairs(self.layer.list) do
-            local y = -(id * (self.ui.checkboxSize + self.ui.checkboxMargin) - self.ui.checkboxSize - self.ui.checkboxMargin)
-            
-            fill(255)
-            ellipseMode(CORNER)
-            ellipse(0, y, self.ui.checkboxSize)
-            
-            textMode(CORNER)
-            textAlign(LEFT)
-            text(string.format("%i", layer), self.ui.checkboxSize + self.ui.checkboxMargin, y)
-        end
-        
-        -- Sprite picker
-        resetMatrix()
-        clip(0, 0, WIDTH, self.ui.atlasWindowHeight)
-            fill(20)
-            rect(0, 0, WIDTH, HEIGHT)
-            
-            pushMatrix()
-            translate(self.atlas.x, self.atlas.y + self.ui.atlasWindowHeight - self.ui.titleBarHeight)
-            scale(self.atlas.scaleX, self.atlas.scaleY)
-            translate(0, -self.texture.height)
-            spriteMode(CORNER)
-            sprite(self.texture)
-            popMatrix()
-            
-            fill(236, 26, 79, 255)
-            rect(0, self.ui.atlasWindowHeight - self.ui.titleBarHeight, WIDTH, self.ui.titleBarHeight)
-        clip()
-        
-        -- Show additional map info
-        resetMatrix()
-        if self._scrollMapWindow then
-            fill(250, 162, 27, 255)
-            rect(0, HEIGHT - self.ui.titleBarHeight, WIDTH, self.ui.titleBarHeight)
-            
-            fill(20)
-            textMode(CENTER)
-            textAlign(CENTER)
-            text(string.format("x: %.0f  y: %.0f", self.camera.x / (self.camera.scaleX * self.tileWidth), self.camera.y / (self.camera.scaleY * self.tileHeight)), WIDTH/2, HEIGHT - self.ui.titleBarHeight/2)
-        else
-            fill(236, 26, 79, 255)
-            rect(0, HEIGHT - self.ui.titleBarHeight, WIDTH, self.ui.titleBarHeight)
-        end
-        
-        popStyle()
+    -- vertical lines
+    for x = -tile_width, WIDTH, tile_width do
+        noFill()
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(x - grid_scroll_x + 1, -tile_height, x - grid_scroll_x + 1, HEIGHT)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(x - grid_scroll_x, -tile_height, x - grid_scroll_x, HEIGHT)
     end
     
-    popStyle()
+    -- horizontal lines
+    for y = -tile_height, HEIGHT, tile_height do
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(-tile_width, y - grid_scroll_y - 1, WIDTH, y - grid_scroll_y - 1)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(-tile_width, y - grid_scroll_y, WIDTH, y - grid_scroll_y)
+    end
+    
+    popMatrix()
+    translate((self.camera_pivot_x * WIDTH) % chunk_width, (self.camera_pivot_y * HEIGHT) % chunk_height)
+    
+    -- display chunks
+    -- vertical and horizontal circles
+    for x = 0, WIDTH, chunk_width do
+        for y = 0, HEIGHT, chunk_height do
+            noStroke()
+            fill(33, 33, 33, opacity)
+            ellipse(x - chunk_scroll_x, y - chunk_scroll_y, 20)
+            noFill()
+            strokeWidth(2)
+            stroke(250, 162, 27, opacity)
+            ellipse(x - chunk_scroll_x, y - chunk_scroll_y, 15)
+        end
+    end
+    
     popMatrix()
 end
 
-function World:touched(touch)
-    -- Developer tools
-    if self.debug then
-        -- Register where touches begin and save identifier flags
-        if touch.state == BEGAN then
-            -- Touch inside world map window
-            if touch.x > 0 and touch.x < WIDTH - self.ui.layerWindowWidth
-            and touch.y > self.ui.atlasWindowHeight and touch.y < HEIGHT - self.ui.titleBarHeight
-            then
-                self._useMapWindow = touch.initTime
-            end
-            
-            -- Touch inside atlas window title bar
-            if touch.y < self.ui.atlasWindowHeight and touch.y > self.ui.atlasWindowHeight - self.ui.titleBarHeight then
-                self._resizeAtlasWindow = true
-            end
-            
-            -- Touch inside atlas window
-            if touch.y < self.ui.atlasWindowHeight - self.ui.titleBarHeight and touch.y > 0 then
-                self._useAtlasWindow = touch.initTime
-            end
-            
-            -- Touch inside layers window
-            if touch.x > WIDTH - self.ui.layerWindowWidth and touch.x < WIDTH
-            and touch.y > self.ui.atlasWindowHeight and touch.y < HEIGHT - self.ui.titleBarHeight
-            then
-                self._useLayerWindow = true
-            end
+
+
+
+
+
+
+
+
+
+
+
+-- Draw grid to divide sprites on the spritesheet
+
+function world:drawAtlasGrid()
+    local opacity = self:atlasIsPanning() and 255 or 64
+    local window_height = HEIGHT * self.atlas_window_height
+    local tile_width = self.atlas_zoom_x * self.tile_width
+    local tile_height = self.atlas_zoom_y * self.tile_height
+    local grid_scroll_x = self.atlas_x % tile_width
+    local grid_scroll_y = self.atlas_y % tile_height
+    
+    -- vertical lines
+    for x = 0, WIDTH, tile_width do
+        noFill()
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(x + grid_scroll_x + 1, 0, x + grid_scroll_x + 1, -window_height)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(x + grid_scroll_x, 0, x + grid_scroll_x, -window_height)
+    end
+    
+    -- horizontal lines
+    for y = math.floor(window_height / tile_height) * -tile_height, 0, tile_height do
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(0, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(0, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Cache atlas_texture position and check if the atlas viewport is panning
+
+function world:atlasIsPanning()
+    if not self.atlas_cache_x
+    or not self.atlas_cache_y
+    or self.atlas_cache_x ~= self.atlas_x
+    or self.atlas_cache_y ~= self.atlas_y
+    then
+        local function updateCache()
+            self.atlas_cache_x = self.atlas_x
+            self.atlas_cache_y = self.atlas_y
         end
         
-        -- Track registered touches
-        if touch.state == MOVING then
-            -- Resize spritesheet window
-            if self._resizeAtlasWindow then
-                if touch.deltaY < 0
-                or (touch.deltaY > 0 and self.ui.atlasWindowHeight - self.ui.titleBarHeight + touch.deltaY < self.atlas.scaleY * self.texture.height)
-                then
-                    if self.ui.atlasWindowHeight + touch.deltaY < HEIGHT - self.ui.titleBarHeight
-                    and self.ui.atlasWindowHeight + touch.deltaY > self.ui.titleBarHeight
-                    then
-                        self.ui.atlasWindowHeight = self.ui.atlasWindowHeight + touch.deltaY
-                        -- TODO: adjust brush position
-                    end
-                    
-                    if (touch.deltaY < 0 and self.atlas.y > self.ui.atlasWindowHeight - self.ui.titleBarHeight)
-                    or (touch.deltaY > 0 and self.atlas.y < self.ui.atlasWindowHeight - self.ui.titleBarHeight)
-                    then
-                        --self.atlas.y = self.atlas.y + touch.deltaY
-                        -- TODO: adjust brush position (y)
-                    end
-                end
-                
-                self.camera:center()
-            end
-            
-            -- Scroll layers window
-            if self._useLayerWindow then
-                local windowHeight = HEIGHT - self.ui.atlasWindowHeight - self.ui.titleBarHeight
-                local layerHeight = #self.layer.list * (self.ui.checkboxSize + self.ui.checkboxMargin) + self.ui.checkboxMargin
-                local y = self.layer.y + touch.deltaY
-                self._scrollLayerWindow = true
-                
-                if y > 0
-                and layerHeight - y > windowHeight
-                then
-                    self.layer.y = y
-                end
-            end
-            
-            -- Sub-actions on map window
-            if self._useMapWindow then
-                -- Scroll world (reverse move camera)
-                if self._scrollMapWindow then
-                    self.camera.x = self.camera.x - touch.deltaX
-                    self.camera.y = self.camera.y - touch.deltaY
-                else
-                -- Draw map
-                    self._brushMapWindow = true
-                    print("draaawww tileee...")
-                end
-            end
+        if not self.atlas_cache_x or not self.atlas_cache_y then
+            updateCache()
+        else
+            -- delay the cache update
+            -- without this you couldn't not ask for the status multiple times inside the draw loop
+            tween.delay(.1, updateCache)
         end
         
-        if touch.state == ENDED then
-            -- Callbacks for actions inside map window
-            if self._useMapWindow then
-                -- Finished drawing onto map
-                if self._brushMapWindow
-                or touch.duration < self.gestureTimer
-                then
-                    -- Just tapped onto map
-                    if not self._brushMapWindow then
-                        print("adjusted tile")
-                    else
-                    -- Continuously painted over map
-                        print("adjusted multiple tiles")
-                    end
-                    
-                    sound(unpack(self.sfx.action))
-                else
-                -- Finisched scrolling world map camera
-                    print("map moved")
-                end
-            end
+        return true
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Cache camera position and check if the map viewport is panning
+
+function world:mapIsPanning()
+    if not self.camera_cache_x
+    or not self.camera_cache_y
+    or self.camera_cache_x ~= self.camera_x
+    or self.camera_cache_y ~= self.camera_y
+    then
+        local function updateCache()
+            self.camera_cache_x = self.camera_x
+            self.camera_cache_y = self.camera_y
+        end
+        
+        if not self.camera_cache_x or not self.camera_cache_y then
+            updateCache()
+        else
+            -- delay the cache update
+            -- without this you couldn't not ask for the status multiple times inside the draw loop
+            tween.delay(.1, updateCache)
+        end
+        
+        return true
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:brushIsResizing()
+    if not self.brush_cache_width
+    or not self.brush_cache_height
+    or self.brush_cache_width ~= self.brush_width
+    or self.brush_cache_height ~= self.brush_height
+    then
+        local function updateCache()
+            self.brush_cache_width = self.brush_width
+            self.brush_cache_height = self.brush_height
+        end
+        
+        if not self.brush_cache_width or not self.brush_cache_height then
+            updateCache()
+        else
+            -- delay the cache update
+            -- without this you couldn't not ask for the status multiple times inside the draw loop
+            tween.delay(.1, updateCache)
+        end
+        
+        return true
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawAtlasBrush()
+    pushStyle()
+    pushMatrix()
+    translate(self.atlas_x, self.atlas_y)
+    translate(0, HEIGHT * self.atlas_window_height - self.title_bar_height)
+    scale(self.atlas_zoom_x, self.atlas_zoom_y)
+    translate(self.brush_x * self.tile_width, -self.brush_y * self.tile_height)
+    translate(0, -self.brush_height * self.tile_height)
+    
+    noFill()
+    stroke(0)
+    strokeWidth(1)
+    rect(0, 0, self.tile_width * self.brush_width, self.tile_height * self.brush_height)
+    
+    stroke(255)
+    strokeWidth(.5)
+    rect(.5, .5, self.tile_width * self.brush_width - 1, self.tile_height * self.brush_height - 1)
+    
+    popMatrix()
+    popStyle()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawAtlasWindow()
+    local window_height = HEIGHT * self.atlas_window_height
+    
+    -- background
+    pushStyle()
+    noStroke()
+    fill(20)
+    rect(0, 0, WIDTH, window_height)
+    
+    -- atlas
+    if self.atlas_texture then
+        pushMatrix()
+        translate(self.atlas_x, self.atlas_y)
+        translate(0, window_height - self.title_bar_height)
+        scale(self.atlas_zoom_x, self.atlas_zoom_y)
+        translate(0, -self.atlas_texture.height)
+        
+        clip(0, 0, WIDTH, window_height - 1)
+            fill(0)
+            rect(0, 0, self.atlas_texture.width, self.atlas_texture.height)
+        
+            spriteMode(CORNER)
+            sprite(self.atlas_texture)
+            
+            -- grid
+            resetMatrix()
+            translate(0, window_height - self.title_bar_height)
+            self:drawAtlasGrid()
+            
+            -- brush
+            resetMatrix()
+            self:drawAtlasBrush()
+        clip()
+        popMatrix()
+    end
+    
+    -- title bar
+    if self:brushIsResizing() then
+        fill(250, 162, 27, 255)
+    else
+        fill(236, 26, 79, 255)
+    end
+    
+    rect(0, window_height - self.title_bar_height, WIDTH, self.title_bar_height)
+    popStyle()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:resizeAtlasWindow(touch)
+    if touch.state == BEGAN
+    and touch.y < HEIGHT * self.atlas_window_height
+    and touch.y > HEIGHT * self.atlas_window_height - self.title_bar_height
+    then
+        self.resize_atlas_window = true
+        return true
+    end
+    
+    
+    if touch.state == MOVING
+    and self.resize_atlas_window
+    then
+        local y = self.atlas_window_height + touch.deltaY
+        local deltaHeight = y / HEIGHT -- as percentage multiplier
+        local height = self.atlas_window_height + deltaHeight
+        local window_height = HEIGHT * height
+        
+        if touch.deltaY > 0
+        and self.atlas_y > 0
+        then
+            self.atlas_y = math.max(0, self.atlas_y - touch.deltaY) -- reveal top overflow
+        end
+        
+        if window_height >= self.title_bar_height
+        and window_height <= HEIGHT - self.title_bar_height
+        and window_height <= self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height - self.atlas_y
+        then
+            self.atlas_window_height = height
+        end
+        
+        return true
+    end
+    
+    if touch.state == ENDED then
+        if touch.tapCount > 1
+        and self.resize_atlas_window
+        then
+            self.atlas_window_height = self.title_bar_height / HEIGHT
+        end
+        
+        self.resize_atlas_window = nil
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:panAtlasWindow(touch)
+    if touch.state == MOVING
+    and touch.initY < HEIGHT * self.atlas_window_height
+    and touch.y < HEIGHT * self.atlas_window_height
+    then
+        local window_height = HEIGHT * self.atlas_window_height
+        local width = self.atlas_texture.width * self.atlas_zoom_x
+        local height = self.atlas_texture.height * self.atlas_zoom_y
+        local x = self.atlas_x + touch.deltaX
+        local y = self.atlas_y + touch.deltaY
+        
+        if (width > WIDTH and x < 0 and x + width > WIDTH)
+        or (width < WIDTH and x > 0 and x + width < WIDTH)
+        then
+            self.atlas_x = x
+        end
+        
+        if (height > window_height - self.title_bar_height and y > 0 and y < height + self.title_bar_height - window_height)
+        or (height < window_height - self.title_bar_height and y < window_height - self.title_bar_height and y - height > 0)
+        then
+            self.atlas_y = y
+        end
+        
+        return true
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:moveAtlasBrush(touch)
+    if touch.state == ENDED
+    -- just tapped?
+    and touch.initX == touch.x
+    and touch.initY == touch.y
+    -- tapped inside the atlas?
+    and touch.initX > self.atlas_x
+    and touch.initX < self.atlas_x + self.atlas_texture.width * self.atlas_zoom_x
+    and touch.x > self.atlas_x
+    and touch.x < self.atlas_x + self.atlas_texture.width * self.atlas_zoom_x
+    and touch.initY < HEIGHT * self.atlas_window_height - self.title_bar_height
+    then
+        self.brush_x, self.brush_y = self:getAtlasTileIndex(touch.x, touch.y)
+        self:pullBrushIntoAtlasBounds()
+        return true
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:resizeAtlasBrush(touch)
+    local tile_width = self.tile_width * self.atlas_zoom_x
+    local tile_height = self.tile_height * self.atlas_zoom_y
+    
+    
+    if touch.state == BEGAN then
+        local window_height = HEIGHT * self.atlas_window_height - self.title_bar_height
+        local brush_x = self.brush_x * tile_width + self.atlas_x
+        local brush_y = window_height - self.brush_y * tile_height + self.atlas_y
+        local brush_width = self.brush_width * tile_width
+        local brush_height = self.brush_height * tile_height
+        
+        if touch.x > brush_x and touch.x < brush_x + brush_width -- touched inside brush?
+        and touch.y > brush_y - brush_height and touch.y < brush_y
+        then
+            self.resize_atlas_brush = true
+            return true
         end
     end
     
-    -- Clear all identifier flags
+    
+    if touch.state == MOVING and self.resize_atlas_brush then
+        local cols = self.atlas_texture.width / self.tile_width
+        local rows = self.atlas_texture.height / self.tile_height
+        local w = self.brush_width + touch.deltaX / tile_width
+        local h = self.brush_height - touch.deltaY / tile_height
+        
+        self.brush_width = math.min(math.max(1, w), cols)
+        self.brush_height = math.min(math.max(1, h), rows)
+        
+        return true
+    end
+    
+    
     if touch.state == ENDED then
-        -- BEGAN states
-        self._resizeAtlasWindow = nil
-        self._useAtlasWindow = nil
-        self._useLayerWindow = nil
-        self._useMapWindow = nil
-        self._brushMapWindow = nil
-        -- MOVING states
-        self._scrollAtlasWindow = nil
-        self._scrollLayerWindow = nil
-        -- ENDED states
-        --
-        -- update() flags
-        self._scrollMapWindow = nil
-        self._resizeBrush = nil
+        self.brush_width = math.floor(self.brush_width)
+        self.brush_height = math.floor(self.brush_height)
+        self:pullBrushIntoAtlasBounds()
+        self.resize_atlas_brush = nil
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Adjust brush position when it goes outside the spritesheet bounds
+
+function world:pullBrushIntoAtlasBounds()
+    local cols = self.atlas_texture.width / self.tile_width
+    local rows = self.atlas_texture.height / self.tile_height
+    local overlap_x = self.brush_x + self.brush_width - cols
+    local overlap_y = self.brush_y + self.brush_height - rows
+    
+    if overlap_x > 0 then self.brush_x = self.brush_x - overlap_x end
+    if overlap_y > 0 then self.brush_y = self.brush_y - overlap_y end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Combine every part and draw the world (and editor if needed)
+
+function world:draw()
+    noSmooth()
+    self:drawAtlasWindow()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:touched(touch)
+    if not self:resizeAtlasWindow(touch) then
+        if not self:resizeAtlasBrush(touch) then
+            self:panAtlasWindow(touch)
+            self:moveAtlasBrush(touch)
+        end
+    end
+    
+    if touch.state == ENDED then
+        sound(world.sfx_mouse_click)
     end
 end
+

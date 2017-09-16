@@ -1,47 +1,59 @@
--- Cavemen
--- An 8-bit roguelike and developer tools
--- Version 0.3.2
--- (c) kennstewayne.de
+-- Cavemen FP
+-- 8-bit roguelike, rpg and adventure level editor and developer tools
+-- Version 0.4
+-- (c) 2017 kontakt@herrsch.de
+
+
+
+
 
 function setup()
-    World:init()
-    Display = mesh()
-    Display.texture = image(WIDTH, HEIGHT)
-    Display:addRect(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT)
-    Display.shader = shader("Documents:scanlines")
-    Display.shader.opacity = .25
-    Display.shader.margin = 3
-    Display.shader.size = 1
+    --World:init()
     
-    parameter.watch("EngineProfile")
+    display = mesh()
+    display.texture = image(WIDTH, HEIGHT)
+    display:addRect(WIDTH/2, HEIGHT/2, WIDTH, HEIGHT)
+    display.shader = shader("Documents:scanlines")
+    display.shader.opacity = .2
+    display.shader.margin = 3
+    display.shader.size = 1
+    
     parameter.action("DeleteProjectData", function() clearProjectData() end)
-    parameter.integer("Brush", 1, 64, 5)
     parameter.boolean("Editor", true, function(flag)
-        World.debug = flag
-        World.camera:center()
+        world.debug = flag
+        world:centerCameraPivot()
     end)
 end
 
+
+
+
+
+
 function orientationChanged(screen)
-    World:orientationChanged(screen)
 end
+
+
+
+
+
 
 function draw()
-    setContext(Display.texture)
+    setContext(display.texture)
     background(20)
-    World:draw()
+    world:draw()
+    debugger(1, 0)
     setContext()
-    Display:draw()
     
-    do EngineProfile = string.format("Frame Rate: %.3fms \nUpdate Frequency: %ifps \nLua Memory: %.0fkb",
-        1000 * DeltaTime,
-        math.floor(1/DeltaTime),
-        collectgarbage("count"))
-        collectgarbage()
-    end
+    display:draw()
 end
 
+
+
+
+
+
 function touched(touch)
-    World:touched(touch)
+    world:touched(touch)
 end
 
