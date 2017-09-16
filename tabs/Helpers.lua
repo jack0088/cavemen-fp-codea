@@ -1465,6 +1465,7 @@ do
     function UIButton:draw()
         pushStyle()
         
+        noStroke()
         fill(self.bg_color)
         rectMode(CORNER)
         rect(self.x, self.y, self.width, self.height)

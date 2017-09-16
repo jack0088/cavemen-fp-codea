@@ -2,9 +2,7 @@
 
 world = {}
 
-
-
-world.debug = true
+world.debug = false
 
 world.level_file_path = nil
 
@@ -20,6 +18,7 @@ world.atlas_x = 0
 world.atlas_y = 0
 world.atlas_zoom_x = 6
 world.atlas_zoom_y = 6
+world.atlas_window_height = .25 -- as percentage multiplier
 
 world.tile_width = 8
 world.tile_height = 8
@@ -35,12 +34,13 @@ world.map = {}
 
 world.layer_list = {}
 world.layer_scroll = 0
+world.layer_window_width = .1 -- as percentage multiplier
+
+world.title_bar_height = 32
 
 world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
 
-world.title_bar_height = 32
-world.atlas_window_height = .25 -- as percentage multiplier
-world.layer_window_width = .1 -- as percentage multiplier
+
 
 
 
@@ -60,13 +60,17 @@ world.layer_window_width = .1 -- as percentage multiplier
 
 function world:centerCameraPivot()
     if self.debug then
-        self.camera_pivot_x = (WIDTH  - self.layer_window_width) / WIDTH/2
-        self.camera_pivot_y = (HEIGHT - self.atlas_window_height - self.title_bar_height) / HEIGHT/2 + self.atlas_window_height / HEIGHT
+        local layer_window = WIDTH * self.layer_window_width
+        local atlas_window = HEIGHT * self.atlas_window_height
+        
+        self.camera_pivot_x = (WIDTH - layer_window) / WIDTH*.5
+        self.camera_pivot_y = (HEIGHT - self.title_bar_height - atlas_window) / HEIGHT*.5 + atlas_window / HEIGHT
+        
         return
     end
     
-    self.pivotX = .5
-    self.pivotY = .5
+    self.camera_pivot_x = .5
+    self.camera_pivot_y = .5
 end
 
 
@@ -133,29 +137,6 @@ function world:getCameraOffset()
         chunks_x,
         chunks_y
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Calculate positions of visible tiles and chunks
-
-function world:getCameraVisibles()
-    
-end
-
-
-
-
 
 
 
@@ -270,11 +251,10 @@ function world:drawMapGrid()
         line(-tile_width, y - grid_scroll_y, WIDTH, y - grid_scroll_y)
     end
     
-    popMatrix()
+    resetMatrix()
     translate((self.camera_pivot_x * WIDTH) % chunk_width, (self.camera_pivot_y * HEIGHT) % chunk_height)
     
     -- display chunks
-    -- vertical and horizontal circles
     for x = 0, WIDTH, chunk_width do
         for y = 0, HEIGHT, chunk_height do
             noStroke()
@@ -289,6 +269,36 @@ function world:drawMapGrid()
     
     popMatrix()
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawMapWindow()
+    pushMatrix()
+    
+    self:centerCameraPivot()
+    self:drawMapGrid()
+    
+    translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
+    translate(-self.camera_x, -self.camera_y)
+    scale(self.camera_zoom_x, self.camera_zoom_y)
+    
+    rect(0,0,8,8)
+    
+    popMatrix()
+end
+
 
 
 
@@ -332,8 +342,6 @@ function world:drawAtlasGrid()
         line(0, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
     end
 end
-
-
 
 
 
@@ -509,6 +517,7 @@ end
 
 
 function world:drawAtlasWindow()
+    self:restrictAtlasWindowHeight()
     local window_height = HEIGHT * self.atlas_window_height
     
     -- background
@@ -571,19 +580,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 function world:resizeAtlasWindow(touch)
     if touch.state == BEGAN
     and touch.y < HEIGHT * self.atlas_window_height
@@ -598,8 +594,8 @@ function world:resizeAtlasWindow(touch)
     and self.resize_atlas_window
     then
         local y = self.atlas_window_height + touch.deltaY
-        local deltaHeight = y / HEIGHT -- as percentage multiplier
-        local height = self.atlas_window_height + deltaHeight
+        local delta_height = y / HEIGHT -- as percentage multiplier
+        local height = self.atlas_window_height + delta_height
         local window_height = HEIGHT * height
         
         if touch.deltaY > 0
@@ -726,7 +722,6 @@ end
 
 
 
-
 function world:resizeAtlasBrush(touch)
     local tile_width = self.tile_width * self.atlas_zoom_x
     local tile_height = self.tile_height * self.atlas_zoom_y
@@ -809,12 +804,39 @@ end
 
 
 
+function world:restrictAtlasWindowHeight()
+    local window_height = HEIGHT * self.atlas_window_height
+    local atlas_height = self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height
+    
+    if window_height > atlas_height then
+        self.atlas_window_height = atlas_height / HEIGHT
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 -- Combine every part and draw the world (and editor if needed)
 
 function world:draw()
     noSmooth()
-    self:drawAtlasWindow()
+    
+    self:drawMapWindow()
+    
+    if self.debug then
+        self:drawAtlasWindow()
+    end
 end
 
 
@@ -829,15 +851,19 @@ end
 
 
 function world:touched(touch)
-    if not self:resizeAtlasWindow(touch) then
-        if not self:resizeAtlasBrush(touch) then
-            self:panAtlasWindow(touch)
-            self:moveAtlasBrush(touch)
+    if self.debug then
+        
+        if not self:resizeAtlasWindow(touch) then
+            if not self:resizeAtlasBrush(touch) then
+                self:panAtlasWindow(touch)
+                self:moveAtlasBrush(touch)
+            end
         end
-    end
-    
-    if touch.state == ENDED then
-        sound(world.sfx_mouse_click)
+        
+        if touch.state == ENDED then
+            sound(world.sfx_mouse_click)
+        end
+        
     end
 end
 
