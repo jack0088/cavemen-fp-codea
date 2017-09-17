@@ -16,7 +16,7 @@
 
 
 do -- PICO-8 color palette
-    colorPico8 = {
+    pico8 = {
         color(0, 0, 0, 255),
         color(29, 43, 83, 255),
         color(126, 37, 83, 255),
@@ -36,23 +36,23 @@ do -- PICO-8 color palette
         color(255, 255, 255, 255)
     }
     
-    colorPico8.black       = colorPico8[1]
-    colorPico8.dark_blue   = colorPico8[2]
-    colorPico8.dark_purple = colorPico8[3]
-    colorPico8.dark_green  = colorPico8[4]
-    colorPico8.brown       = colorPico8[5]
-    colorPico8.dark_gray   = colorPico8[6]
-    colorPico8.light_gray  = colorPico8[7]
-    colorPico8.light_white = colorPico8[8]
-    colorPico8.red         = colorPico8[9]
-    colorPico8.orange      = colorPico8[10]
-    colorPico8.yellow      = colorPico8[11]
-    colorPico8.green       = colorPico8[12]
-    colorPico8.blue        = colorPico8[13]
-    colorPico8.indigo      = colorPico8[14]
-    colorPico8.pink        = colorPico8[15]
-    colorPico8.peach       = colorPico8[16]
-    colorPico8.white       = colorPico8[17]
+    pico8.black       = pico8[1]
+    pico8.dark_blue   = pico8[2]
+    pico8.dark_purple = pico8[3]
+    pico8.dark_green  = pico8[4]
+    pico8.brown       = pico8[5]
+    pico8.dark_gray   = pico8[6]
+    pico8.light_gray  = pico8[7]
+    pico8.light_white = pico8[8]
+    pico8.red         = pico8[9]
+    pico8.orange      = pico8[10]
+    pico8.yellow      = pico8[11]
+    pico8.green       = pico8[12]
+    pico8.blue        = pico8[13]
+    pico8.indigo      = pico8[14]
+    pico8.pink        = pico8[15]
+    pico8.peach       = pico8[16]
+    pico8.white       = pico8[17]
 end
 
 
@@ -247,7 +247,7 @@ end
 
 
 
-local function rfc_3986_encode(src)
+local function rfc3986Encode(src)
     if not src then return "" end
     return tostring(src:gsub("[^-._~%w]", function(char)
         return string.format('%%%02X', char:byte()):upper()
@@ -500,6 +500,8 @@ function randomPointInCircle(radius)
         radius * r * math.cos(t),
         radius * r * math.sin(t)
 end
+
+
 
 
 
@@ -2831,15 +2833,15 @@ do
         
         local list = {}
         local order = {}
-        local key = rfc_3986_encode(app_consumer_secret).."&"..rfc_3986_encode(account_access_token_secret)
+        local key = rfc3986Encode(app_consumer_secret).."&"..rfc3986Encode(account_access_token_secret)
         local signature = ""
         local prefix = "oauth_"
         local header = "OAuth"
         
         -- Build "oauth_signature"
         for key, value in pairs(parameters) do
-            local k = rfc_3986_encode(key)
-            list[k] = rfc_3986_encode(tostring(value))
+            local k = rfc3986Encode(key)
+            list[k] = rfc3986Encode(tostring(value))
             table.insert(order, k)
         end
         
@@ -2850,7 +2852,7 @@ do
             signature = signature.."&"..key.."="..value
         end
         
-        signature = method:upper().."&"..rfc_3986_encode(url).."&"..rfc_3986_encode(signature:sub(2))
+        signature = method:upper().."&"..rfc3986Encode(url).."&"..rfc3986Encode(signature:sub(2))
         
         -- Sign/Encode "oauth_signature" with key
         parameters.oauth_signature = base_64_encode(
@@ -2867,7 +2869,7 @@ do
         -- Build complete "Authorization" header string
         for key, value in pairs(parameters) do
             if key:find(prefix) then
-                header = header..' '..rfc_3986_encode(key)..'="'..rfc_3986_encode(tostring(value))..'",'
+                header = header..' '..rfc3986Encode(key)..'="'..rfc3986Encode(tostring(value))..'",'
             end
         end
         

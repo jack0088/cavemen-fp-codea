@@ -32,8 +32,10 @@ function setup()
     btn_world_debug.text_hover_color = color(255)
     btn_world_debug.bg_color = color(68, 128, 223)
     
-    function btn_world_debug.callback()
-        world.debug = not world.debug
+    function btn_world_debug:callback()
+        self.is_active = not self.is_active
+        self.title = self.is_active and "Exit" or "Edit"
+        world.debug = self.is_active
     end
     
     function btn_world_debug:touched(touch) -- override to work as a toggle
@@ -44,8 +46,7 @@ function setup()
             and touch.x > self.x and touch.x < self.x + self.width
             and touch.y > self.y and touch.y < self.y + self.height
             then
-                self.callback()
-                self.is_active = not self.is_active
+                self:callback()
             end
         end
     end

@@ -54,8 +54,6 @@ world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
 
 
 
-
-
 -- Center camera pivot inside available screen space
 
 function world:centerCameraPivot()
@@ -174,190 +172,6 @@ end
 
 
 
-
--- (Re-)render visible tiles into certain chunks
-
-function world:renderChunk(world_x, world_y)
-    local canvas = mesh()
-    canvas.texture = image(self.chunk_width, self.chunk_height)
-    canvas:addRect(self.tileWidth/2, self.tileHeight/2, self.tileWidth, self.tileHeight)
-    
-    setContext(canvas.texture)
-    pushMatrix()
-    resetMatrix()
-    translate(-(self.tileWidth * self.chunkWidth * region.chunk.x), -(self.tileHeight * self.chunkHeight * region.chunk.y))
-    
-    for _, tile in ipairs(region.tile) do
-        --sprite + clip or just mesh?
-    end
-    
-    setContext()
-    popMatrix()
-    
-    return canvas
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Draw grid to visualize tiles and chunks inside the map viewport
-
-function world:drawMapGrid()
-    local opacity = self:mapIsPanning() and 255 or 64
-    
-    local tile_width = self.camera_zoom_x * self.tile_width
-    local tile_height = self.camera_zoom_y * self.tile_height
-    local chunk_width = tile_width * self.chunk_width
-    local chunk_height = tile_height * self.chunk_height
-    
-    local grid_scroll_x = self.camera_x % tile_width
-    local grid_scroll_y = self.camera_y % tile_height
-    local chunk_scroll_x = self.camera_x % chunk_width
-    local chunk_scroll_y = self.camera_y % chunk_height
-    
-    
-    pushMatrix()
-    translate((self.camera_pivot_x * WIDTH) % tile_width, (self.camera_pivot_y * HEIGHT) % tile_height)
-    
-    -- vertical lines
-    for x = -tile_width, WIDTH, tile_width do
-        noFill()
-        strokeWidth(2)
-        stroke(33, 33, 33, opacity)
-        line(x - grid_scroll_x + 1, -tile_height, x - grid_scroll_x + 1, HEIGHT)
-        strokeWidth(1)
-        stroke(96, 88, 79, opacity)
-        line(x - grid_scroll_x, -tile_height, x - grid_scroll_x, HEIGHT)
-    end
-    
-    -- horizontal lines
-    for y = -tile_height, HEIGHT, tile_height do
-        strokeWidth(2)
-        stroke(33, 33, 33, opacity)
-        line(-tile_width, y - grid_scroll_y - 1, WIDTH, y - grid_scroll_y - 1)
-        strokeWidth(1)
-        stroke(96, 88, 79, opacity)
-        line(-tile_width, y - grid_scroll_y, WIDTH, y - grid_scroll_y)
-    end
-    
-    resetMatrix()
-    translate((self.camera_pivot_x * WIDTH) % chunk_width, (self.camera_pivot_y * HEIGHT) % chunk_height)
-    
-    -- display chunks
-    for x = 0, WIDTH, chunk_width do
-        for y = 0, HEIGHT, chunk_height do
-            noStroke()
-            fill(33, 33, 33, opacity)
-            ellipse(x - chunk_scroll_x, y - chunk_scroll_y, 20)
-            noFill()
-            strokeWidth(2)
-            stroke(250, 162, 27, opacity)
-            ellipse(x - chunk_scroll_x, y - chunk_scroll_y, 15)
-        end
-    end
-    
-    popMatrix()
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function world:drawMapWindow()
-    pushMatrix()
-    
-    self:centerCameraPivot()
-    self:drawMapGrid()
-    
-    translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
-    translate(-self.camera_x, -self.camera_y)
-    scale(self.camera_zoom_x, self.camera_zoom_y)
-    
-    rect(0,0,8,8)
-    
-    popMatrix()
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Draw grid to divide sprites on the spritesheet
-
-function world:drawAtlasGrid()
-    local opacity = self:atlasIsPanning() and 255 or 64
-    local window_height = HEIGHT * self.atlas_window_height
-    local tile_width = self.atlas_zoom_x * self.tile_width
-    local tile_height = self.atlas_zoom_y * self.tile_height
-    local grid_scroll_x = self.atlas_x % tile_width
-    local grid_scroll_y = self.atlas_y % tile_height
-    
-    -- vertical lines
-    for x = 0, WIDTH, tile_width do
-        noFill()
-        strokeWidth(2)
-        stroke(33, 33, 33, opacity)
-        line(x + grid_scroll_x + 1, 0, x + grid_scroll_x + 1, -window_height)
-        strokeWidth(1)
-        stroke(96, 88, 79, opacity)
-        line(x + grid_scroll_x, 0, x + grid_scroll_x, -window_height)
-    end
-    
-    -- horizontal lines
-    for y = math.floor(window_height / tile_height) * -tile_height, 0, tile_height do
-        strokeWidth(2)
-        stroke(33, 33, 33, opacity)
-        line(0, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
-        strokeWidth(1)
-        stroke(96, 88, 79, opacity)
-        line(0, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
-    end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
--- Cache atlas_texture position and check if the atlas viewport is panning
-
 function world:atlasIsPanning()
     if not self.atlas_cache_x
     or not self.atlas_cache_y
@@ -395,8 +209,6 @@ end
 
 
 
-
--- Cache camera position and check if the map viewport is panning
 
 function world:mapIsPanning()
     if not self.camera_cache_x
@@ -473,34 +285,262 @@ end
 
 
 
+-- Adjust brush position when it goes outside the spritesheet bounds
 
-
-
-function world:drawAtlasBrush()
-    pushStyle()
-    pushMatrix()
-    translate(self.atlas_x, self.atlas_y)
-    translate(0, HEIGHT * self.atlas_window_height - self.title_bar_height)
-    scale(self.atlas_zoom_x, self.atlas_zoom_y)
-    translate(self.brush_x * self.tile_width, -self.brush_y * self.tile_height)
-    translate(0, -self.brush_height * self.tile_height)
+function world:pullBrushIntoAtlasBounds()
+    local cols = self.atlas_texture.width / self.tile_width
+    local rows = self.atlas_texture.height / self.tile_height
+    local overlap_x = self.brush_x + self.brush_width - cols
+    local overlap_y = self.brush_y + self.brush_height - rows
     
-    noFill()
-    stroke(0)
-    strokeWidth(1)
-    rect(0, 0, self.tile_width * self.brush_width, self.tile_height * self.brush_height)
-    
-    stroke(255)
-    strokeWidth(.5)
-    rect(.5, .5, self.tile_width * self.brush_width - 1, self.tile_height * self.brush_height - 1)
-    
-    popMatrix()
-    popStyle()
+    if overlap_x > 0 then self.brush_x = self.brush_x - overlap_x end
+    if overlap_y > 0 then self.brush_y = self.brush_y - overlap_y end
 end
 
 
 
 
+
+
+
+
+
+
+
+
+-- Adjust atlas_texture position when it goes outside the spritesheet window
+
+function world:pullAtlasIntoAtlasWindowBounds()
+    local atlas_width = self.atlas_texture.width * self.atlas_zoom_x
+    
+    if ( -- atlas_texture.width smaller than WIDTH?
+        atlas_width < WIDTH
+        and (self.atlas_x <= 0 or self.atlas_x >= WIDTH or self.atlas_x + atlas_width <= 0 or self.atlas_x + atlas_width >= WIDTH)
+    )
+    or ( -- atlas_texture.width larger than WIDTH?
+        atlas_width > WIDTH
+        and (self.atlas_x > 0 or self.atlas_x + atlas_width < WIDTH)
+    )
+    then
+        self.atlas_x = 0
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Clamp the height of the spritesheet window
+
+function world:pullAtlasWindowHeightOverflow()
+    local window_height = HEIGHT * self.atlas_window_height
+    local atlas_height = self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height
+    
+    if window_height > atlas_height then
+        self.atlas_window_height = atlas_height / HEIGHT
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:renderChunk(world_x, world_y)
+    local canvas = mesh()
+    canvas.texture = image(self.chunk_width, self.chunk_height)
+    canvas:addRect(self.tileWidth/2, self.tileHeight/2, self.tileWidth, self.tileHeight)
+    
+    setContext(canvas.texture)
+    pushMatrix()
+    resetMatrix()
+    translate(-(self.tileWidth * self.chunkWidth * region.chunk.x), -(self.tileHeight * self.chunkHeight * region.chunk.y))
+    
+    for _, tile in ipairs(region.tile) do
+        --sprite + clip or just mesh?
+    end
+    
+    setContext()
+    popMatrix()
+    
+    return canvas
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawMapGrid()
+    local opacity = self:mapIsPanning() and 255 or 64
+    
+    local tile_width = self.camera_zoom_x * self.tile_width
+    local tile_height = self.camera_zoom_y * self.tile_height
+    local chunk_width = tile_width * self.chunk_width
+    local chunk_height = tile_height * self.chunk_height
+    
+    local grid_scroll_x = self.camera_x % tile_width
+    local grid_scroll_y = self.camera_y % tile_height
+    local chunk_scroll_x = self.camera_x % chunk_width
+    local chunk_scroll_y = self.camera_y % chunk_height
+    
+    
+    pushMatrix()
+    translate((self.camera_pivot_x * WIDTH) % tile_width, (self.camera_pivot_y * HEIGHT) % tile_height)
+    
+    -- vertical lines
+    for x = -tile_width, WIDTH, tile_width do
+        noFill()
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(x + grid_scroll_x + 1, -tile_height, x + grid_scroll_x + 1, HEIGHT)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(x + grid_scroll_x, -tile_height, x + grid_scroll_x, HEIGHT)
+    end
+    
+    -- horizontal lines
+    for y = -tile_height, HEIGHT, tile_height do
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(-tile_width, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(-tile_width, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
+    end
+    
+    resetMatrix()
+    translate((self.camera_pivot_x * WIDTH) % chunk_width, (self.camera_pivot_y * HEIGHT) % chunk_height)
+    
+    -- display chunks
+    for x = 0, WIDTH, chunk_width do
+        for y = 0, HEIGHT, chunk_height do
+            noStroke()
+            fill(33, 33, 33, opacity)
+            ellipse(x + chunk_scroll_x, y + chunk_scroll_y, 20)
+            noFill()
+            strokeWidth(2)
+            stroke(250, 162, 27, opacity)
+            ellipse(x + chunk_scroll_x, y + chunk_scroll_y, 15)
+        end
+    end
+    
+    popMatrix()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawAtlasGrid()
+    local opacity = self:atlasIsPanning() and 255 or 64
+    local window_height = HEIGHT * self.atlas_window_height
+    local tile_width = self.atlas_zoom_x * self.tile_width
+    local tile_height = self.atlas_zoom_y * self.tile_height
+    local grid_scroll_x = self.atlas_x % tile_width
+    local grid_scroll_y = self.atlas_y % tile_height
+    
+    -- vertical lines
+    for x = 0, WIDTH, tile_width do
+        noFill()
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(x + grid_scroll_x + 1, 0, x + grid_scroll_x + 1, -window_height)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(x + grid_scroll_x, 0, x + grid_scroll_x, -window_height)
+    end
+    
+    -- horizontal lines
+    for y = math.floor(window_height / tile_height) * -tile_height, 0, tile_height do
+        strokeWidth(2)
+        stroke(33, 33, 33, opacity)
+        line(0, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
+        strokeWidth(1)
+        stroke(96, 88, 79, opacity)
+        line(0, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawMapWindow()
+    self:centerCameraPivot()
+    
+    pushStyle()
+    pushMatrix()
+    
+    translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
+    translate(self.camera_x, self.camera_y)
+    scale(self.camera_zoom_x, self.camera_zoom_y)
+    
+    rect(0,0,8,8)
+    
+    
+    resetMatrix()
+    self:drawMapGrid()
+    
+    
+    -- title bar
+    if self:mapIsPanning() then
+        fill(250, 162, 27, 255)
+    else
+        fill(236, 26, 79, 255)
+    end
+    
+    noStroke()
+    rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
+    
+    popMatrix()
+    popStyle()
+end
 
 
 
@@ -543,14 +583,14 @@ function world:drawAtlasWindow()
             spriteMode(CORNER)
             sprite(self.atlas_texture)
             
+            -- brush
+            resetMatrix()
+            self:drawAtlasBrush()
+        
             -- grid
             resetMatrix()
             translate(0, window_height - self.title_bar_height)
             self:drawAtlasGrid()
-            
-            -- brush
-            resetMatrix()
-            self:drawAtlasBrush()
         clip()
         popMatrix()
     end
@@ -578,6 +618,38 @@ end
 
 
 
+function world:drawAtlasBrush()
+    pushStyle()
+    pushMatrix()
+    translate(self.atlas_x, self.atlas_y)
+    translate(0, HEIGHT * self.atlas_window_height - self.title_bar_height)
+    scale(self.atlas_zoom_x, self.atlas_zoom_y)
+    translate(self.brush_x * self.tile_width, -self.brush_y * self.tile_height)
+    translate(0, -self.brush_height * self.tile_height)
+    
+    noFill()
+    stroke(0)
+    strokeWidth(1)
+    rect(0, 0, self.tile_width * self.brush_width, self.tile_height * self.brush_height)
+    
+    stroke(255)
+    strokeWidth(.5)
+    rect(.5, .5, self.tile_width * self.brush_width - 1, self.tile_height * self.brush_height - 1)
+    
+    popMatrix()
+    popStyle()
+end
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -592,17 +664,13 @@ function world:resizeAtlasWindow(touch)
     end
     
     
-    if touch.state == MOVING
-    and self.resize_atlas_window
-    then
+    if touch.state == MOVING and self.resize_atlas_window then
         local y = self.atlas_window_height + touch.deltaY
         local delta_height = y / HEIGHT -- as percentage multiplier
         local height = self.atlas_window_height + delta_height
         local window_height = HEIGHT * height
         
-        if touch.deltaY > 0
-        and self.atlas_y > 0
-        then
+        if touch.deltaY > 0 and self.atlas_y > 0 then
             self.atlas_y = math.max(0, self.atlas_y - touch.deltaY) -- reveal top overflow
         end
         
@@ -617,12 +685,9 @@ function world:resizeAtlasWindow(touch)
     end
     
     if touch.state == ENDED then
-        if touch.tapCount > 1
-        and self.resize_atlas_window
-        then
+        if touch.tapCount > 1 and self.resize_atlas_window then
             self.atlas_window_height = self.title_bar_height / HEIGHT
         end
-        
         self.resize_atlas_window = nil
     end
     
@@ -642,16 +707,14 @@ end
 
 
 
-
-
-
-
 function world:panAtlasWindow(touch)
+    local window_height = HEIGHT * self.atlas_window_height
+    
+    
     if touch.state == MOVING
-    and touch.initY < HEIGHT * self.atlas_window_height
-    and touch.y < HEIGHT * self.atlas_window_height
+    and touch.initY < window_height
+    and touch.y < window_height
     then
-        local window_height = HEIGHT * self.atlas_window_height
         local width = self.atlas_texture.width * self.atlas_zoom_x
         local height = self.atlas_texture.height * self.atlas_zoom_y
         local x = self.atlas_x + touch.deltaX
@@ -675,6 +738,45 @@ function world:panAtlasWindow(touch)
     return false
 end
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:panMapWindow(touch)
+    local atlas_window = HEIGHT * self.atlas_window_height
+    local layer_window = WIDTH * self.layer_window_width
+    
+    
+    if touch.state == BEGAN
+    and touch.x < WIDTH - layer_window
+    and touch.y > atlas_window
+    and touch.y < HEIGHT - self.title_bar_height
+    then
+        self.pan_map_window = true
+        return true
+    end
+    
+    if touch.state == MOVING and self.pan_map_window then
+        self.camera_x = self.camera_x + touch.deltaX
+        self.camera_y = self.camera_y + touch.deltaY
+        return true
+    end
+    
+    if touch.state == ENDED then
+        self.pan_map_window = nil
+    end
+    
+    return false
+end
 
 
 
@@ -781,91 +883,19 @@ end
 
 
 
--- Adjust brush position when it goes outside the spritesheet bounds
-
-function world:pullBrushIntoAtlasBounds()
-    local cols = self.atlas_texture.width / self.tile_width
-    local rows = self.atlas_texture.height / self.tile_height
-    local overlap_x = self.brush_x + self.brush_width - cols
-    local overlap_y = self.brush_y + self.brush_height - rows
-    
-    if overlap_x > 0 then self.brush_x = self.brush_x - overlap_x end
-    if overlap_y > 0 then self.brush_y = self.brush_y - overlap_y end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-function world:pullAtlasIntoAtlasWindowBounds()
-    local atlas_width = self.atlas_texture.width * self.atlas_zoom_x
-    
-    if ( -- atlas_texture.width smaller than WIDTH?
-        atlas_width < WIDTH
-        and (self.atlas_x <= 0 or self.atlas_x >= WIDTH or self.atlas_x + atlas_width <= 0 or self.atlas_x + atlas_width >= WIDTH)
-    )
-    or ( -- atlas_texture.width larger than WIDTH?
-        atlas_width > WIDTH
-        and (self.atlas_x > 0 or self.atlas_x + atlas_width < WIDTH)
-    )
-    then
-        self.atlas_x = 0
-    end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function world:pullAtlasWindowHeightOverflow()
-    local window_height = HEIGHT * self.atlas_window_height
-    local atlas_height = self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height
-    
-    if window_height > atlas_height then
-        self.atlas_window_height = atlas_height / HEIGHT
-    end
-end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 -- Combine every part and draw the world (and editor if needed)
 
 function world:draw()
+    pushStyle()
     noSmooth()
     
-    self:drawMapWindow()
-    
     if self.debug then
+        self:drawMapWindow()
         self:drawAtlasWindow()
     end
+    
+    popStyle()
 end
 
 
@@ -882,10 +912,12 @@ end
 function world:touched(touch)
     if self.debug then
         
-        if not self:resizeAtlasWindow(touch) then
-            if not self:resizeAtlasBrush(touch) then
-                self:panAtlasWindow(touch)
-                self:moveAtlasBrush(touch)
+        if not self:panMapWindow(touch) then
+            if not self:resizeAtlasWindow(touch) then
+                if not self:resizeAtlasBrush(touch) then
+                    self:panAtlasWindow(touch)
+                    self:moveAtlasBrush(touch)
+                end
             end
         end
         
