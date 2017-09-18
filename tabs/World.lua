@@ -168,6 +168,30 @@ end
 
 
 
+function world:getTileIndicesEclosedByBrushBounds()
+    local cols = self.atlas_texture.width / self.tile_width
+    --local rows = self.atlas_texture.height / self.tile_height
+    local indices = {}
+    
+    for y = self.brush_y, self.brush_y + self.brush_height - 1 do
+        for x = self.brush_x, self.brush_x + self.brush_width - 1 do
+            table.insert(indices, math.tointeger(cols * y + x + 1))
+        end
+    end
+    
+    return indices
+end
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -436,16 +460,16 @@ function world:drawMapGrid()
     resetMatrix()
     
     do -- origin axis indicators
-        strokeWidth(1)
         local ox = WIDTH * self.camera_pivot_x + self.camera_x
         local oy = HEIGHT * self.camera_pivot_y + self.camera_y
         
         -- y-axis
-        stroke(68, 128, 223, 355)
+        strokeWidth(2)
+        stroke(68, 128, 223, opacity)
         line(ox, oy, ox, HEIGHT)
         
         -- x-axis
-        stroke(236, 26, 79, 255)
+        stroke(236, 26, 79, opacity)
         line(ox, oy, WIDTH, oy)
     end
     
@@ -629,6 +653,22 @@ function world:drawAtlasWindow()
     end
     
     rect(0, window_height - self.title_bar_height, WIDTH, self.title_bar_height)
+    
+    do -- tile indices that the brush encloses
+        local indices = self:getTileIndicesEclosedByBrushBounds()
+        local info_text = string.format("selected %i...%i", indices[1], indices[#indices]) -- abbreviate long text
+        
+        if #indices <= 4 then
+            info_text = "selected "..table.concat(indices, ", ")
+        end
+        
+        fill(255)
+        font("HelveticaNeue-Light")
+        fontSize(18)
+        textMode(CORNER)
+        text(info_text, 8, window_height - self.title_bar_height + 4)
+    end
+    
     popStyle()
 end
 
