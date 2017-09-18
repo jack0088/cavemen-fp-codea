@@ -6,6 +6,16 @@ world.debug = false
 
 world.level_file_path = nil
 
+world.tile_width = 8
+world.tile_height = 8
+world.chunk_width = 8 -- in tiles
+world.chunk_height = 8
+
+world.brush_x = 0 -- in tiles
+world.brush_y = 0
+world.brush_width = 1 -- in tiles
+world.brush_height = 1
+
 world.camera_x = 0
 world.camera_y = 0
 world.camera_zoom_x = 8
@@ -20,19 +30,7 @@ world.atlas_zoom_x = 6
 world.atlas_zoom_y = 6
 world.atlas_window_height = .25 -- as percentage multiplier
 
-world.tile_width = 8
-world.tile_height = 8
-world.chunk_width = 8 -- in tiles
-world.chunk_height = 8
-
-world.brush_x = 0 -- in tiles
-world.brush_y = 0
-world.brush_width = 1 -- in tiles
-world.brush_height = 1
-
-world.map = {}
-
-world.layer_list = {}
+world.layer_stack = {}
 world.layer_scroll = 0
 world.layer_window_width = .1 -- as percentage multiplier
 
@@ -123,12 +121,13 @@ end
 
 
 -- Calculate by how many tiles and chunks the camera has been moved
+-- The resulting x and y position represents at which tile or chunk you are in the world
  
 function world:getCameraOffset()
     local tiles_x = math.floor(self.camera_x / (self.camera_zoom_x * self.tile_width))
     local tiles_y = math.floor(self.camera_y / (self.camera_zoom_y * self.tile_height))
-    local chunks_x = tiles_x * self.chunk_width
-    local chunks_y = tiles_y * self.chunk_height
+    local chunks_x = math.floor(tiles_x / self.chunk_width)
+    local chunks_y = math.floor(tiles_y / self.chunk_height)
     return
         tiles_x,
         tiles_y,
@@ -409,6 +408,7 @@ function world:drawMapGrid()
     local chunk_scroll_y = self.camera_y % chunk_height
     
     
+    pushStyle()
     pushMatrix()
     translate((self.camera_pivot_x * WIDTH) % tile_width, (self.camera_pivot_y * HEIGHT) % tile_height)
     
@@ -434,11 +434,27 @@ function world:drawMapGrid()
     end
     
     resetMatrix()
+    
+    do -- origin axis indicators
+        strokeWidth(1)
+        local ox = WIDTH * self.camera_pivot_x + self.camera_x
+        local oy = HEIGHT * self.camera_pivot_y + self.camera_y
+        
+        -- y-axis
+        stroke(68, 128, 223, 355)
+        line(ox, oy, ox, HEIGHT)
+        
+        -- x-axis
+        stroke(236, 26, 79, 255)
+        line(ox, oy, WIDTH, oy)
+    end
+    
+    resetMatrix()
     translate((self.camera_pivot_x * WIDTH) % chunk_width, (self.camera_pivot_y * HEIGHT) % chunk_height)
     
     -- display chunks
-    for x = 0, WIDTH, chunk_width do
-        for y = 0, HEIGHT, chunk_height do
+    for x = -chunk_width, WIDTH, chunk_width do
+        for y = -chunk_height, HEIGHT - chunk_height, chunk_height do
             noStroke()
             fill(33, 33, 33, opacity)
             ellipse(x + chunk_scroll_x, y + chunk_scroll_y, 20)
@@ -450,6 +466,7 @@ function world:drawMapGrid()
     end
     
     popMatrix()
+    popStyle()
 end
 
 
@@ -516,6 +533,8 @@ function world:drawMapWindow()
     
     pushStyle()
     pushMatrix()
+    font("HelveticaNeue-Light")
+    fontSize(18)
     
     translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
     translate(self.camera_x, self.camera_y)
@@ -523,20 +542,27 @@ function world:drawMapWindow()
     
     rect(0,0,8,8)
     
-    
     resetMatrix()
     self:drawMapGrid()
     
-    
     -- title bar
+    noStroke()
+    fill(236, 26, 79, 255)
+    
     if self:mapIsPanning() then
         fill(250, 162, 27, 255)
-    else
-        fill(236, 26, 79, 255)
     end
     
-    noStroke()
     rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
+    
+    fill(255)
+    
+    if self:mapIsPanning() then
+        fill(0)
+    end
+    
+    local offset_x, offset_y = self:getCameraOffset()
+    text(string.format("position %.0f, %.0f", -offset_x, -offset_y), WIDTH/2, HEIGHT - self.title_bar_height/2)
     
     popMatrix()
     popStyle()
@@ -637,6 +663,32 @@ function world:drawAtlasBrush()
     rect(.5, .5, self.tile_width * self.brush_width - 1, self.tile_height * self.brush_height - 1)
     
     popMatrix()
+    popStyle()
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawLayerWindow()
+    local window_width = WIDTH * self.layer_window_width
+    local atlas_window = HEIGHT * self.atlas_window_height
+    
+    pushStyle()
+    
+    fill(20)
+    rect(WIDTH - window_width, atlas_window, window_width, HEIGHT - atlas_window - self.title_bar_height)
+    
     popStyle()
 end
 
@@ -884,14 +936,42 @@ end
 
 
 
+function world:resetCameraPosition(touch)
+    if touch.state == ENDED
+    and touch.initY > HEIGHT - self.title_bar_height
+    and touch.y > HEIGHT - self.title_bar_height
+    and touch.tapCount >= 2
+    then
+        self.camera_x = 0
+        self.camera_y = 0
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 -- Combine every part and draw the world (and editor if needed)
 
 function world:draw()
     pushStyle()
+    
+    background(0)
     noSmooth()
     
     if self.debug then
         self:drawMapWindow()
+        self:drawLayerWindow()
         self:drawAtlasWindow()
     end
     
@@ -920,6 +1000,8 @@ function world:touched(touch)
                 end
             end
         end
+        
+        self:resetCameraPosition(touch)
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)

@@ -21,10 +21,12 @@ function setup()
     display = mesh()
     display.texture = image(size, size)
     display:addRect(size/2, size/2, size, size)
+    ---[[
     display.shader = shader("Documents:scanlines")
-    display.shader.opacity = .2
+    display.shader.opacity = .25
     display.shader.margin = 3
     display.shader.size = 1
+    --]]
     
     
     btn_world_debug = UIButton("Edit", 0, 0, 72, 32)
@@ -75,7 +77,6 @@ function draw()
     btn_world_debug.y = HEIGHT - btn_world_debug.height
     
     setContext(display.texture)
-        background(20)
         world:draw()
         btn_world_debug:draw()
         debugger(1, 0)
