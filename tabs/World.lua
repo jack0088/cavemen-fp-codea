@@ -8,15 +8,13 @@ world.debug = false
 
 
 
-world.level_file_path = nil
-
-
+world.bg_color = paint.black
 
 world.title_bar_height = 32
 
-
-
 world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
+
+world.level_file_path = nil
 
 
 
@@ -691,7 +689,7 @@ function world:drawAtlasWindow()
         translate(0, -self.atlas_texture.height)
         
         clip(0, 0, WIDTH, window_height - 1)
-            fill(paint.black)
+            fill(self.bg_color)
             rect(0, 0, self.atlas_texture.width, self.atlas_texture.height)
             
             spriteMode(CORNER)
@@ -717,6 +715,7 @@ function world:drawAtlasWindow()
         fill(paint.red)
     end
     
+    noStroke()
     rect(0, window_height - self.title_bar_height, WIDTH, self.title_bar_height)
     
     do -- info about tile indices that are enclosed by the atlas brush
@@ -1097,7 +1096,7 @@ end
 function world:draw()
     pushStyle()
     
-    background(paint.black)
+    background(self.bg_color)
     noSmooth()
     
     if self.debug then
