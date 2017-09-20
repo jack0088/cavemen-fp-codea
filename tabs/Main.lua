@@ -21,18 +21,17 @@ function setup()
     display = mesh()
     display.texture = image(size, size)
     display:addRect(size/2, size/2, size, size)
-    ---[[
     display.shader = shader("Documents:scanlines")
     display.shader.opacity = .25
     display.shader.margin = 3
     display.shader.size = 1
-    --]]
     
     
     btn_world_debug = UIButton("Edit", 0, 0, 72, 32)
-    btn_world_debug.text_color = color(0)
-    btn_world_debug.text_hover_color = color(255)
-    btn_world_debug.bg_color = color(68, 128, 223)
+    btn_world_debug.text_color = paint.black
+    btn_world_debug.bg_color = paint.blue
+    btn_world_debug.text_hover_color = paint.white
+    btn_world_debug.bg_hover_color = paint.orange
     
     function btn_world_debug:callback()
         self.is_active = not self.is_active
@@ -77,6 +76,7 @@ function draw()
     btn_world_debug.y = HEIGHT - btn_world_debug.height
     
     setContext(display.texture)
+        background(paint.black)
         world:draw()
         btn_world_debug:draw()
         debugger(1, 0)

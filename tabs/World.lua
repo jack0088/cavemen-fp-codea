@@ -2,19 +2,40 @@
 
 world = {}
 
+
+
 world.debug = false
 
+
+
 world.level_file_path = nil
+
+
+
+world.title_bar_height = 32
+
+
+
+world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
+
+
+
 
 world.tile_width = 8
 world.tile_height = 8
 world.chunk_width = 8 -- in tiles
 world.chunk_height = 8
 
+
+
+
 world.brush_x = 0 -- in tiles
 world.brush_y = 0
 world.brush_width = 1 -- in tiles
 world.brush_height = 1
+
+
+
 
 world.camera_x = 0
 world.camera_y = 0
@@ -23,6 +44,10 @@ world.camera_zoom_y = 8
 world.camera_pivot_x = .5
 world.camera_pivot_y = .5
 
+
+
+
+
 world.atlas_texture = readImage("Dropbox:cavemen_spritesheet")
 world.atlas_x = 0
 world.atlas_y = 0
@@ -30,13 +55,51 @@ world.atlas_zoom_x = 6
 world.atlas_zoom_y = 6
 world.atlas_window_height = .25 -- as percentage multiplier
 
+
+
+
+
+
+
+
 world.layer_stack = {}
 world.layer_scroll = 0
 world.layer_window_width = .1 -- as percentage multiplier
 
-world.title_bar_height = 32
 
-world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
+
+
+
+
+
+
+
+
+world.btn_sprite_edit = UIButton("Sprite")
+world.btn_sprite_edit.height = world.title_bar_height
+world.btn_sprite_edit.text_color = paint.white
+world.btn_sprite_edit.bg_color = paint.orange
+world.btn_sprite_edit.text_hover_color = paint.white
+world.btn_sprite_edit.bg_hover_color = paint.blue
+
+
+function world.btn_sprite_edit:draw()
+    self.y = HEIGHT * world.atlas_window_height - world.title_bar_height/2 - self.height/2
+    UIButton.draw(self)
+end
+
+
+function world.btn_sprite_edit.callback()
+    -- TODO create sprite editor and link it here
+end
+
+
+
+
+
+
+
+
 
 
 
@@ -169,13 +232,13 @@ end
 
 
 function world:getTileIndicesEclosedByBrushBounds()
+    local counter_offset = 1 -- to count tiles from 0 upwards (like pico-8 does) set this value to 0
     local cols = self.atlas_texture.width / self.tile_width
-    --local rows = self.atlas_texture.height / self.tile_height
     local indices = {}
     
     for y = self.brush_y, self.brush_y + self.brush_height - 1 do
         for x = self.brush_x, self.brush_x + self.brush_width - 1 do
-            table.insert(indices, math.tointeger(cols * y + x + 1))
+            table.insert(indices, math.tointeger(cols * y + x + counter_offset))
         end
     end
     
@@ -440,20 +503,20 @@ function world:drawMapGrid()
     for x = -tile_width, WIDTH, tile_width do
         noFill()
         strokeWidth(2)
-        stroke(33, 33, 33, opacity)
+        stroke(paint.dark_gray.r, paint.dark_gray.g, paint.dark_gray.b, opacity)
         line(x + grid_scroll_x + 1, -tile_height, x + grid_scroll_x + 1, HEIGHT)
         strokeWidth(1)
-        stroke(96, 88, 79, opacity)
+        stroke(paint.umber.r, paint.umber.g, paint.umber.b, opacity)
         line(x + grid_scroll_x, -tile_height, x + grid_scroll_x, HEIGHT)
     end
     
     -- horizontal lines
     for y = -tile_height, HEIGHT, tile_height do
         strokeWidth(2)
-        stroke(33, 33, 33, opacity)
+        stroke(paint.dark_gray.r, paint.dark_gray.g, paint.dark_gray.b, opacity)
         line(-tile_width, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
         strokeWidth(1)
-        stroke(96, 88, 79, opacity)
+        stroke(paint.umber.r, paint.umber.g, paint.umber.b, opacity)
         line(-tile_width, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
     end
     
@@ -465,11 +528,11 @@ function world:drawMapGrid()
         
         -- y-axis
         strokeWidth(2)
-        stroke(68, 128, 223, opacity)
+        stroke(paint.blue.r, paint.blue.g, paint.blue.b, opacity)
         line(ox, oy, ox, HEIGHT)
         
         -- x-axis
-        stroke(236, 26, 79, opacity)
+        stroke(paint.red.r, paint.red.g, paint.red.b, opacity)
         line(ox, oy, WIDTH, oy)
     end
     
@@ -480,11 +543,11 @@ function world:drawMapGrid()
     for x = -chunk_width, WIDTH, chunk_width do
         for y = -chunk_height, HEIGHT - chunk_height, chunk_height do
             noStroke()
-            fill(33, 33, 33, opacity)
+            fill(paint.dark_gray.r, paint.dark_gray.g, paint.dark_gray.b, opacity)
             ellipse(x + chunk_scroll_x, y + chunk_scroll_y, 20)
             noFill()
             strokeWidth(2)
-            stroke(250, 162, 27, opacity)
+            stroke(paint.orange.r, paint.orange.g, paint.orange.b, opacity)
             ellipse(x + chunk_scroll_x, y + chunk_scroll_y, 15)
         end
     end
@@ -519,20 +582,20 @@ function world:drawAtlasGrid()
     for x = 0, WIDTH, tile_width do
         noFill()
         strokeWidth(2)
-        stroke(33, 33, 33, opacity)
+        stroke(paint.dark_gray.r, paint.dark_gray.g, paint.dark_gray.b, opacity)
         line(x + grid_scroll_x + 1, 0, x + grid_scroll_x + 1, -window_height)
         strokeWidth(1)
-        stroke(96, 88, 79, opacity)
+        stroke(paint.umber.r, paint.umber.g, paint.umber.b, opacity)
         line(x + grid_scroll_x, 0, x + grid_scroll_x, -window_height)
     end
     
     -- horizontal lines
     for y = math.floor(window_height / tile_height) * -tile_height, 0, tile_height do
         strokeWidth(2)
-        stroke(33, 33, 33, opacity)
+        stroke(paint.dark_gray.r, paint.dark_gray.g, paint.dark_gray.b, opacity)
         line(0, y + grid_scroll_y - 1, WIDTH, y + grid_scroll_y - 1)
         strokeWidth(1)
-        stroke(96, 88, 79, opacity)
+        stroke(paint.umber.r, paint.umber.g, paint.umber.b, opacity)
         line(0, y + grid_scroll_y, WIDTH, y + grid_scroll_y)
     end
 end
@@ -571,18 +634,18 @@ function world:drawMapWindow()
     
     -- title bar
     noStroke()
-    fill(236, 26, 79, 255)
+    fill(paint.red)
     
     if self:mapIsPanning() then
-        fill(250, 162, 27, 255)
+        fill(paint.orange)
     end
     
     rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
     
-    fill(255)
+    fill(paint.white)
     
     if self:mapIsPanning() then
-        fill(0)
+        fill(paint.black)
     end
     
     local offset_x, offset_y = self:getCameraOffset()
@@ -615,8 +678,9 @@ function world:drawAtlasWindow()
     -- background
     pushStyle()
     noStroke()
-    fill(20)
+    fill(paint.dark_gray)
     rect(0, 0, WIDTH, window_height)
+    
     
     -- atlas
     if self.atlas_texture then
@@ -627,9 +691,9 @@ function world:drawAtlasWindow()
         translate(0, -self.atlas_texture.height)
         
         clip(0, 0, WIDTH, window_height - 1)
-            fill(0)
+            fill(paint.black)
             rect(0, 0, self.atlas_texture.width, self.atlas_texture.height)
-        
+            
             spriteMode(CORNER)
             sprite(self.atlas_texture)
             
@@ -645,16 +709,17 @@ function world:drawAtlasWindow()
         popMatrix()
     end
     
+    
     -- title bar
     if self:brushIsResizing() then
-        fill(250, 162, 27, 255)
+        fill(paint.orange)
     else
-        fill(236, 26, 79, 255)
+        fill(paint.red)
     end
     
     rect(0, window_height - self.title_bar_height, WIDTH, self.title_bar_height)
     
-    do -- tile indices that the brush encloses
+    do -- info about tile indices that are enclosed by the atlas brush
         local indices = self:getTileIndicesEclosedByBrushBounds()
         local info_text = string.format("selected %i...%i", indices[1], indices[#indices]) -- abbreviate long text
         
@@ -662,12 +727,18 @@ function world:drawAtlasWindow()
             info_text = "selected "..table.concat(indices, ", ")
         end
         
-        fill(255)
+        local w, h = textSize(info_text)
+        
+        fill(paint.white)
         font("HelveticaNeue-Light")
         fontSize(18)
-        textMode(CORNER)
-        text(info_text, 8, window_height - self.title_bar_height + 4)
+        text(info_text, WIDTH/2, window_height - self.title_bar_height/2)
     end
+    
+    
+    -- buttons
+    self.btn_sprite_edit:draw()
+    
     
     popStyle()
 end
@@ -694,11 +765,11 @@ function world:drawAtlasBrush()
     translate(0, -self.brush_height * self.tile_height)
     
     noFill()
-    stroke(0)
+    stroke(paint.black)
     strokeWidth(1)
     rect(0, 0, self.tile_width * self.brush_width, self.tile_height * self.brush_height)
     
-    stroke(255)
+    stroke(paint.white)
     strokeWidth(.5)
     rect(.5, .5, self.tile_width * self.brush_width - 1, self.tile_height * self.brush_height - 1)
     
@@ -726,7 +797,7 @@ function world:drawLayerWindow()
     
     pushStyle()
     
-    fill(20)
+    fill(paint.dark_gray)
     rect(WIDTH - window_width, atlas_window, window_width, HEIGHT - atlas_window - self.title_bar_height)
     
     popStyle()
@@ -777,9 +848,6 @@ function world:resizeAtlasWindow(touch)
     end
     
     if touch.state == ENDED then
-        if touch.tapCount > 1 and self.resize_atlas_window then
-            self.atlas_window_height = self.title_bar_height / HEIGHT
-        end
         self.resize_atlas_window = nil
     end
     
@@ -997,6 +1065,29 @@ end
 
 
 
+function world:closeAtlasWindow(touch)
+    local window_height = HEIGHT * self.atlas_window_height
+    
+    if touch.state == ENDED
+    and touch.tapCount > 1
+    and touch.initY < window_height
+    and touch.initY > window_height - self.title_bar_height
+    and touch.y < window_height
+    and touch.y > window_height - self.title_bar_height
+    then
+        self.atlas_window_height = self.title_bar_height / HEIGHT
+    end
+end
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1006,7 +1097,7 @@ end
 function world:draw()
     pushStyle()
     
-    background(0)
+    background(paint.black)
     noSmooth()
     
     if self.debug then
@@ -1042,6 +1133,8 @@ function world:touched(touch)
         end
         
         self:resetCameraPosition(touch)
+        self:closeAtlasWindow(touch)
+        self.btn_sprite_edit:touched(touch)
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)

@@ -5,6 +5,7 @@
 
 
 -- TODO finish and then include GIF89a parser here too
+-- TODO change all colors in this class to use paint[color] variable
 
 
 
@@ -15,45 +16,29 @@
 
 
 
-do -- PICO-8 color palette
-    pico8 = {
-        color(0, 0, 0, 255), -- 1
-        color(29, 43, 83, 255), -- 2
-        color(126, 37, 83, 255), -- 3
-        color(0, 135, 81, 255), -- 4
-        color(171, 82, 54, 255), -- 5
-        color(95, 87, 79, 255), -- 6
-        color(194, 195, 199, 255), -- 7
-        color(255, 241, 232, 255), -- 8
-        color(255, 0, 77, 255), -- 9
-        color(255, 163, 0, 255), -- 10
-        color(255, 236, 39, 255), -- 11
-        color(0, 228, 54, 255), -- 12
-        color(41, 173, 255, 255), -- 13
-        color(131, 118, 156, 255), -- 14
-        color(255, 119, 168, 255), -- 15
-        color(255, 204, 170, 255), -- 16
-        color(255, 255, 255, 255) -- 17 (custom addition)
-    }
-    
-    pico8.black       = pico8[1]
-    pico8.dark_blue   = pico8[2]
-    pico8.dark_purple = pico8[3]
-    pico8.dark_green  = pico8[4]
-    pico8.brown       = pico8[5]
-    pico8.dark_gray   = pico8[6]
-    pico8.light_gray  = pico8[7]
-    pico8.light_white = pico8[8]
-    pico8.red         = pico8[9]
-    pico8.orange      = pico8[10]
-    pico8.yellow      = pico8[11]
-    pico8.green       = pico8[12]
-    pico8.blue        = pico8[13]
-    pico8.indigo      = pico8[14]
-    pico8.pink        = pico8[15]
-    pico8.peach       = pico8[16]
-    pico8.white       = pico8[17]
-end
+-- pallet of colors
+
+paint = {
+    transparent = color(0, 0),
+    black = color(0),
+    dark_gray = color(20),
+    light_gray = color(194, 195, 199, 255),
+    dark_blue = color(29, 43, 83, 255),
+    dark_purple = color(126, 37, 83, 255),
+    dark_green = color(0, 135, 81, 255),
+    brown = color(171, 82, 54, 255),
+    umber = color(95, 87, 79, 255),
+    pearl = color(255, 241, 232, 255),
+    red = color(255, 0, 77, 255),
+    orange = color(255, 163, 0, 255),
+    yellow = color(255, 236, 39, 255),
+    green = color(0, 228, 54, 255),
+    blue = color(41, 173, 255, 255),
+    indigo = color(131, 118, 156, 255),
+    pink = color(255, 119, 168, 255),
+    peach = color(255, 204, 170, 255),
+    white = color(255)
+}
 
 
 
@@ -69,7 +54,7 @@ end
 function debugger(pivotX, pivotY) -- in range of [0-1]
     pushStyle()
     fontSize(14)
-    fill(255)
+    fill(paint.white)
     
     local info = string.format(
         "framerate: %.3fms \nfrequency: %ifps \nmemory: %.0fkb",
@@ -1460,6 +1445,7 @@ do
         self.text_color = color(68, 128, 223)
         self.text_hover_color = color(225, 208, 0)
         self.bg_color = color(60, 60, 59)
+        self.bg_hover_color = self.bg_color
         self.bg_image = nil -- either plain image or a table of 9 images (listed from top left to bottom right)
     end
     
@@ -1468,7 +1454,7 @@ do
         pushStyle()
         
         noStroke()
-        fill(self.bg_color)
+        fill(self.is_active and self.bg_hover_color or self.bg_color)
         rectMode(CORNER)
         rect(self.x, self.y, self.width, self.height)
         
@@ -1559,12 +1545,7 @@ do
         end
         
         if self.title then
-            if self.is_active then
-                fill(self.text_hover_color)
-            else
-                fill(self.text_color)
-            end
-            
+            fill(self.is_active and self.text_hover_color or self.text_color)
             font("HelveticaNeue-Light")
             fontSize(20)
             textMode(CENTER)
