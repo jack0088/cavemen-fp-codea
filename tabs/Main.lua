@@ -34,9 +34,11 @@ function setup()
     btn_world_debug.bg_hover_color = paint.orange
     
     function btn_world_debug:callback()
-        self.is_active = not self.is_active
-        self.title = self.is_active and "Exit" or "Edit"
-        world.debug = self.is_active
+        if not self.is_active then
+            world:showDeveloperTools()
+        else
+            world:hideDeveloperTools()
+        end
     end
     
     function btn_world_debug:touched(touch) -- override to work as a toggle
@@ -74,15 +76,17 @@ end
 function draw()
     btn_world_debug.x = WIDTH - btn_world_debug.width
     btn_world_debug.y = HEIGHT - btn_world_debug.height
+    btn_world_debug.is_active = world.debug
+    btn_world_debug.title = btn_world_debug.is_active and "Exit" or "Edit"
     
     setContext(display.texture)
         background(paint.black)
         world:draw()
         btn_world_debug:draw()
-        debugger(1, 0)
     setContext()
     
     display:draw()
+    debugger(1, 0)
 end
 
 

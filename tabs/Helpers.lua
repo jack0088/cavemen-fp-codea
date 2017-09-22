@@ -1231,18 +1231,18 @@ do
     end
     
     
-    function UISlider:setTitle(text, width) -- change title and align to the left
+    function UISlider:setTitle(txt, width) -- change title and align to the left
         -- title requires space provided by the remainder of state_width to be positioned to the left of the slider
         -- without any remainder title would be overlayed and the slider value would be hidden (which might be a desired effect)
         -- this function prevents the effect
         
-        local w, h = textSize(text)
-        self.title = text
+        local w, h = textSize(txt)
+        self.title = txt
         self.state_width = width and (self.width - width) or (self.width - w)
     end
     
     
-    function UISlider:setSize(width, height) -- change slider size but retain previous dimension ratios
+    function UISlider:setSize(width, height) -- change slider size but retain previous dimension ratios between title and progress bar
         local title_width = self.width - self.state_width
         self.width = width
         self.state_width = self.width

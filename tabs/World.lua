@@ -6,6 +6,9 @@ world = {}
 
 world.debug = false
 
+world.alert = nil -- message box with dismiss and confirm
+
+
 
 
 world.bg_color = paint.black
@@ -61,7 +64,9 @@ world.atlas_window_height = .25 -- as percentage multiplier
 
 
 world.layer_stack = {}
+world.layer_selected = nil -- in ascending order
 world.layer_scroll = 0
+world.layer_item_height = world.title_bar_height
 world.layer_window_width = .1 -- as percentage multiplier
 
 
@@ -98,6 +103,106 @@ end
 
 
 
+
+
+
+world.btn_layer_delete = UIButton("-")
+world.btn_layer_delete.height = world.title_bar_height
+world.btn_layer_delete.text_color = paint.black
+world.btn_layer_delete.bg_color = paint.umber
+world.btn_layer_delete.text_hover_color = paint.white
+world.btn_layer_delete.bg_hover_color = paint.dark_gray
+
+
+
+function world.btn_layer_delete:draw()
+    local window_width = WIDTH * world.layer_window_width
+    self.width = window_width/2 - 1
+    self.x = WIDTH - window_width
+    self.y = HEIGHT - self.height - world.title_bar_height - 2
+    self.callback = function() world:deleteSelectedLayer() end
+    UIButton.draw(self)
+end
+
+
+
+
+
+
+
+
+
+
+world.btn_layer_create = UIButton("+")
+world.btn_layer_create.height = world.title_bar_height
+world.btn_layer_create.text_color = paint.black
+world.btn_layer_create.bg_color = paint.umber
+world.btn_layer_create.text_hover_color = paint.white
+world.btn_layer_create.bg_hover_color = paint.dark_gray
+
+
+function world.btn_layer_create:draw()
+    self.width = WIDTH * world.layer_window_width / 2 - 1
+    self.x = WIDTH - self.width
+    self.y = HEIGHT - self.height - world.title_bar_height - 2
+    self.callback = function() world:createNewLayer() end
+    UIButton.draw(self)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:showDeveloperTools()
+    self.debug = true
+end
+
+
+
+
+
+
+
+
+
+
+
+function world:hideDeveloperTools()
+    self.alert = UIAlert("Close developer tools?")
+    self.alert.left_button.text_color = paint.umber
+    self.alert.left_button.bg_color = paint.orange
+    self.alert.right_button.text_color = paint.umber
+    self.alert.right_button.bg_color = paint.orange
+    self.alert.right_button.title = "Save and Quit"
+    self.alert:open()
+    
+    function self.alert.right_button.callback() -- confirm
+        -- save everything that is needed to be saved before exit the world editor
+        self.debug = false
+        self.alert = nil
+    end
+    
+    function self.alert.left_button.callback() -- alternative dismiss
+        self.alert = nil
+    end
+end
 
 
 
@@ -787,6 +892,251 @@ end
 
 
 
+function world:createNewLayer()
+    local layer_name = "Layer"..#self.layer_stack -- TODO better naming or show immediately the input ui popup
+    
+    local toggle = UISwitch(0, 0, true)
+    toggle.bg_color = paint.transparent
+    toggle.state_color = paint.umber
+    toggle.state_min_width = 0
+    toggle.width = self.layer_item_height
+    toggle.height = self.layer_item_height
+    
+    local button = UIButton(layer_name, 0, 0, WIDTH * self.layer_window_width - self.layer_item_height, self.layer_item_height)
+    button.text_color = paint.white
+    button.bg_color = paint.transparent
+    button.text_hover_color = paint.white
+    button.bg_hover_color = paint.transparent
+    
+    function button.touched(this, touch) -- override default handler to support state propagation
+        if touch.state == BEGAN
+        and touch.x > this.x and touch.x < this.x + this.width
+        and touch.y > this.y and touch.y < this.y + this.height
+        then
+            this.is_active = true
+            return true
+        end
+        
+        if touch.state == ENDED then
+            this.is_active = false
+            
+            if touch.initX > this.x and touch.initX < this.x + this.width
+            and touch.initY > this.y and touch.initY < this.y + this.height
+            and touch.x > this.x and touch.x < this.x + this.width
+            and touch.y > this.y and touch.y < this.y + this.height
+            then
+                return true
+            end
+        end
+        
+        return false
+    end
+    
+    
+    local stack_pos = (self.layer_selected or #self.layer_stack) + 1
+    
+    local object = {
+        visibility_toggle = toggle,
+        layer_button = button,
+        tile_list = {}
+    }
+    
+    table.insert(self.layer_stack, stack_pos, object)
+    self:selectLayer(stack_pos)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:deleteSelectedLayer()
+    if self.layer_selected then
+        table.remove(self.layer_stack, self.layer_selected)
+        self:selectLayer(self.layer_selected - 1)
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+function world:selectLayer(id)
+    if self.layer_selected and self.layer_stack[self.layer_selected] then
+        self.layer_stack[self.layer_selected].layer_button.bg_color = paint.transparent -- deselect current
+    end
+    
+    if #self.layer_stack > 0 then
+        id = math.max(1, id)
+        self.layer_stack[id].layer_button.bg_color = paint.umber -- select another
+        self.layer_selected = id -- save selection
+        return
+    end
+    
+    self.layer_selected = nil
+end
+
+
+
+
+
+
+
+
+
+
+
+function world:renameLayer(id)
+    -- TODO
+    -- display keyboard pop-over hud
+    -- wait until dismissed or confirmed
+    -- change layer_object.layer_button.title to new string
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:touchLayer(touch)
+    if touch.x > WIDTH - WIDTH * self.layer_window_width
+    and touch.y > HEIGHT * self.atlas_window_height
+    and touch.y < HEIGHT - self.title_bar_height
+    then
+        for layer_id, layer_object in ipairs(self.layer_stack) do
+            
+            layer_object.visibility_toggle:touched(touch)
+            
+            if layer_object.layer_button:touched(touch) and touch.state == ENDED then
+                
+                self:selectLayer(layer_id)
+                
+                if touch.tapCount >= 2 then
+                    self:renameLayer(layer_id)
+                end
+                
+                return true
+                
+            end
+        end
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:scrollLayerWindow(touch)
+    local atlas_window = HEIGHT * self.atlas_window_height
+    local layer_window = WIDTH * self.layer_window_width
+    local title_bar = self.title_bar_height + self.layer_item_height + 6
+    
+    
+    if touch.state == MOVING
+    and touch.initX > WIDTH - layer_window
+    and touch.initY > atlas_window
+    and touch.initY < HEIGHT - title_bar
+    then
+        local items_length = self.layer_item_height * #self.layer_stack
+        local curr_scroll = self.layer_scroll + touch.deltaY
+        
+        if items_length > HEIGHT - atlas_window - title_bar
+        and curr_scroll >= 0
+        and curr_scroll <= items_length - (HEIGHT - atlas_window - title_bar)
+        then
+            self.layer_scroll = curr_scroll
+        end
+        
+        return true
+    end
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawLayerStack()
+    local atlas_window = HEIGHT * self.atlas_window_height
+    local layer_window = WIDTH * self.layer_window_width
+    local title_bar = self.title_bar_height + self.layer_item_height + 4
+    local origin_x = WIDTH - layer_window
+    local origin_y = HEIGHT - title_bar + self.layer_scroll
+    
+    clip(origin_x, atlas_window, layer_window, HEIGHT - atlas_window - title_bar)
+    
+    for layer_id, layer_object in ipairs(self.layer_stack) do
+        local button = layer_object.layer_button
+        local toggle = layer_object.visibility_toggle
+        
+        button.width = layer_window - toggle.width
+        button.x = WIDTH - button.width
+        button.y = origin_y - layer_id * button.height
+        
+        toggle.x = origin_x
+        toggle.y = origin_y - layer_id * toggle.height
+        
+        if button.y + button.height > atlas_window
+        and button.y < origin_y
+        and toggle.y + toggle.height > atlas_window
+        and toggle.y < origin_y
+        then
+            button:draw()
+            toggle:draw()
+        end
+    end
+    
+    clip()
+end
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -833,7 +1183,11 @@ function world:resizeAtlasWindow(touch)
         local window_height = HEIGHT * height
         
         if touch.deltaY > 0 and self.atlas_y > 0 then
-            self.atlas_y = math.max(0, self.atlas_y - touch.deltaY) -- reveal top overflow
+            self.atlas_y = math.max(0, self.atlas_y - touch.deltaY) -- reveal atlas texture top overflow
+        end
+        
+        if touch.deltaY < 0 and self.layer_scroll > 0 then
+            self.layer_scroll = math.max(0, self.layer_scroll + touch.deltaY) -- reveal layer items top overflow
         end
         
         if window_height >= self.title_bar_height
@@ -1064,7 +1418,7 @@ end
 
 
 
-function world:closeAtlasWindow(touch)
+function world:minimizeAtlasWindow(touch)
     local window_height = HEIGHT * self.atlas_window_height
     
     if touch.state == ENDED
@@ -1074,9 +1428,11 @@ function world:closeAtlasWindow(touch)
     and touch.y < window_height
     and touch.y > window_height - self.title_bar_height
     then
+        self.layer_scroll = math.max(0, self.layer_scroll - HEIGHT * self.atlas_window_height) -- reveal layer items overflow
         self.atlas_window_height = self.title_bar_height / HEIGHT
     end
 end
+
 
 
 
@@ -1102,7 +1458,15 @@ function world:draw()
     if self.debug then
         self:drawMapWindow()
         self:drawLayerWindow()
+        self:drawLayerStack()
         self:drawAtlasWindow()
+        
+        self.btn_layer_create:draw()
+        self.btn_layer_delete:draw()
+        
+        if self.alert then
+            self.alert:draw()
+        end
     end
     
     popStyle()
@@ -1121,6 +1485,17 @@ end
 
 function world:touched(touch)
     if self.debug then
+        if self.alert then
+            self.alert:touched(touch)
+            return
+        end
+        
+        self:resetCameraPosition(touch)
+        self:minimizeAtlasWindow(touch)
+        
+        self.btn_layer_create:touched(touch)
+        self.btn_layer_delete:touched(touch)
+        self.btn_sprite_edit:touched(touch)
         
         if not self:panMapWindow(touch) then
             if not self:resizeAtlasWindow(touch) then
@@ -1128,12 +1503,10 @@ function world:touched(touch)
                     self:panAtlasWindow(touch)
                     self:moveAtlasBrush(touch)
                 end
+                self:scrollLayerWindow(touch)
+                self:touchLayer(touch)
             end
         end
-        
-        self:resetCameraPosition(touch)
-        self:closeAtlasWindow(touch)
-        self.btn_sprite_edit:touched(touch)
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)
