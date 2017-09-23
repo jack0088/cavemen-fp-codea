@@ -901,8 +901,11 @@ function world:drawAtlasWindow()
     
     do -- full layer name which the brush affecting
         if self.layer_selected then
-            local layer = self.layer_stack[self.layer_selected].layer_button
-            local txt = string.format("altering %s", layer.title)
+            local layer_toggle = self.layer_stack[self.layer_selected].visibility_toggle
+            local layer_button = self.layer_stack[self.layer_selected].layer_button
+            local is_hidden = layer_toggle.value < layer_toggle.max
+            local prefix = is_hidden and "invisible" or "altering"
+            local txt = string.format(prefix.." %s", layer_button.title)
             local w, h = textSize(txt)
             text(txt, WIDTH - w/2 - 16, window_height - self.title_bar_height/2)
         end
