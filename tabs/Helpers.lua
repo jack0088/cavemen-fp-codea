@@ -232,7 +232,7 @@ end
 
 
 
-local function rfc3986Encode(src)
+function rfc3986Encode(src)
     if not src then return "" end
     return tostring(src:gsub("[^-._~%w]", function(char)
         return string.format('%%%02X', char:byte()):upper()
@@ -244,7 +244,7 @@ end
 
 
 
-local function generateRandomString(length)
+function generateRandomString(length)
     local charset = "qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM0123456789"
     local rndnum  = math.random(1, #charset)
     local rndchar = charset:sub(rndnum, rndnum)
@@ -1436,6 +1436,7 @@ do
     
     function UIButton:init(title, x, y, width, height, callback)
         self.title = title -- button without title and bg_color can be used as hidden trigger
+        self.title_format = "%s"
         self.is_active = false -- hovered or tapped?
         self.x = x or 0
         self.y = y or 0
@@ -1551,7 +1552,7 @@ do
             textMode(CENTER)
             textAlign(CENTER)
             textWrapWidth(self.width)
-            text(self.title, self.x + self.width/2, self.y + self.height/2)
+            text(string.format(self.title_format, self.title), self.x + self.width/2, self.y + self.height/2)
         end
         
         popStyle()

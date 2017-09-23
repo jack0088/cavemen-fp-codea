@@ -54,7 +54,7 @@ world.atlas_x = 0
 world.atlas_y = 0
 world.atlas_zoom_x = 6
 world.atlas_zoom_y = 6
-world.atlas_window_height = .25 -- as percentage multiplier
+world.atlas_window_height = .1 -- as percentage multiplier
 
 
 
@@ -67,7 +67,7 @@ world.layer_stack = {}
 world.layer_selected = nil -- in ascending order
 world.layer_scroll = 0
 world.layer_item_height = world.title_bar_height
-world.layer_window_width = .1 -- as percentage multiplier
+world.layer_window_width = .125 -- as percentage multiplier
 
 
 
@@ -146,6 +146,62 @@ function world.btn_layer_create:draw()
     self.x = WIDTH - self.width
     self.y = HEIGHT - self.height - world.title_bar_height - 2
     self.callback = function() world:createNewLayer() end
+    UIButton.draw(self)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+world.btn_layer_sort_front = UIButton("Up")
+world.btn_layer_sort_front.height = world.title_bar_height
+world.btn_layer_sort_front.text_color = paint.black
+world.btn_layer_sort_front.bg_color = paint.umber
+world.btn_layer_sort_front.text_hover_color = paint.white
+world.btn_layer_sort_front.bg_hover_color = paint.dark_gray
+
+
+function world.btn_layer_sort_front:draw()
+    local window_width = WIDTH * world.layer_window_width
+    self.width = window_width/2 - 1
+    self.x = WIDTH - window_width
+    self.y = HEIGHT * world.atlas_window_height + 2
+    self.callback = function() world:shiftSelectedLayerUp() end
+    UIButton.draw(self)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+world.btn_layer_sort_back = UIButton("Down")
+world.btn_layer_sort_back.height = world.title_bar_height
+world.btn_layer_sort_back.text_color = paint.black
+world.btn_layer_sort_back.bg_color = paint.umber
+world.btn_layer_sort_back.text_hover_color = paint.white
+world.btn_layer_sort_back.bg_hover_color = paint.dark_gray
+
+
+function world.btn_layer_sort_back:draw()
+    self.width = WIDTH * world.layer_window_width / 2 - 1
+    self.x = WIDTH - self.width
+    self.y = HEIGHT * world.atlas_window_height + 2
+    self.callback = function() world:shiftSelectedLayerDown() end
     UIButton.draw(self)
 end
 
@@ -821,7 +877,14 @@ function world:drawAtlasWindow()
     end
     
     noStroke()
+    font("HelveticaNeue-Light")
+    fontSize(18)
+    
     rect(0, window_height - self.title_bar_height, WIDTH, self.title_bar_height)
+    
+    
+    -- additional information
+    fill(paint.white)
     
     do -- info about tile indices that are enclosed by the atlas brush
         local indices = self:getTileIndicesEclosedByBrushBounds()
@@ -832,11 +895,17 @@ function world:drawAtlasWindow()
         end
         
         local w, h = textSize(info_text)
-        
-        fill(paint.white)
-        font("HelveticaNeue-Light")
-        fontSize(18)
         text(info_text, WIDTH/2, window_height - self.title_bar_height/2)
+    end
+    
+    
+    do -- full layer name which the brush affecting
+        if self.layer_selected then
+            local layer = self.layer_stack[self.layer_selected].layer_button
+            local txt = string.format("altering %s", layer.title)
+            local w, h = textSize(txt)
+            text(txt, WIDTH - w/2 - 16, window_height - self.title_bar_height/2)
+        end
     end
     
     
@@ -893,7 +962,7 @@ end
 
 
 function world:createNewLayer()
-    local layer_name = "Layer"..#self.layer_stack -- TODO better naming or show immediately the input ui popup
+    local layer_name = generateRandomString(8) -- TODO better naming or show immediately the input ui popup
     
     local toggle = UISwitch(0, 0, true)
     toggle.bg_color = paint.transparent
@@ -902,11 +971,36 @@ function world:createNewLayer()
     toggle.width = self.layer_item_height
     toggle.height = self.layer_item_height
     
+    
     local button = UIButton(layer_name, 0, 0, WIDTH * self.layer_window_width - self.layer_item_height, self.layer_item_height)
     button.text_color = paint.white
     button.bg_color = paint.transparent
     button.text_hover_color = paint.white
     button.bg_hover_color = paint.transparent
+    
+    
+    function button.draw(this)
+        pushStyle()
+        font("HelveticaNeue-Light") -- this is needed!
+        fontSize(20)
+        
+        do -- automatically shorten layer names to fit into remaining space
+            local title_width = textSize(this.title)
+            
+            if title_width >= this.width then
+                local max_width = this.width / title_width
+                local title_length = math.floor(#this.title * max_width - 3)
+                this.title_format = "%."..title_length.."s..." -- n letters and 3 dots
+            else
+                this.title_format = "%s" -- default
+            end
+        end
+        
+        UIButton.draw(this)
+        
+        popStyle()
+    end
+    
     
     function button.touched(this, touch) -- override default handler to support state propagation
         if touch.state == BEGAN
@@ -933,7 +1027,9 @@ function world:createNewLayer()
     end
     
     
-    local stack_pos = (self.layer_selected or #self.layer_stack) + 1
+    -- order is like in photoshop (top layers are hierarchically above bottom ones)
+    
+    local stack_pos = self.layer_selected or 1
     
     local object = {
         visibility_toggle = toggle,
@@ -942,8 +1038,14 @@ function world:createNewLayer()
     }
     
     table.insert(self.layer_stack, stack_pos, object)
+    self:deselectLayer(stack_pos + 1)
     self:selectLayer(stack_pos)
 end
+
+
+
+
+
 
 
 
@@ -959,9 +1061,11 @@ end
 function world:deleteSelectedLayer()
     if self.layer_selected then
         table.remove(self.layer_stack, self.layer_selected)
-        self:selectLayer(self.layer_selected - 1)
+        self:selectLayer(self.layer_selected)
     end
 end
+
+
 
 
 
@@ -974,19 +1078,71 @@ end
 
 
 function world:selectLayer(id)
-    if self.layer_selected and self.layer_stack[self.layer_selected] then
-        self.layer_stack[self.layer_selected].layer_button.bg_color = paint.transparent -- deselect current
-    end
-    
     if #self.layer_stack > 0 then
-        id = math.max(1, id)
+        id = math.min(#self.layer_stack, math.max(1, id)) -- clamp
         self.layer_stack[id].layer_button.bg_color = paint.umber -- select another
         self.layer_selected = id -- save selection
         return
     end
-    
     self.layer_selected = nil
 end
+
+
+
+
+
+
+
+
+
+function world:deselectLayer(id)
+    if id and self.layer_stack[id] then
+        self.layer_stack[id].layer_button.bg_color = paint.transparent
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:shiftSelectedLayerUp()
+    local object = self.layer_stack[self.layer_selected]
+    local stack_pos = math.max(1, self.layer_selected - 1)
+    
+    self:deselectLayer(self.layer_selected)
+    table.remove(self.layer_stack, self.layer_selected)
+    table.insert(self.layer_stack, stack_pos, object)
+    self:selectLayer(stack_pos)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:shiftSelectedLayerDown()
+    local object = self.layer_stack[self.layer_selected]
+    local stack_pos = math.min(#self.layer_stack, self.layer_selected + 1)
+    
+    self:deselectLayer(self.layer_selected)
+    table.remove(self.layer_stack, self.layer_selected)
+    table.insert(self.layer_stack, stack_pos, object)
+    self:selectLayer(stack_pos)
+end
+
 
 
 
@@ -1016,10 +1172,10 @@ end
 
 
 
-function world:touchLayer(touch)
+function world:touchSingleLayer(touch)
     if touch.x > WIDTH - WIDTH * self.layer_window_width
-    and touch.y > HEIGHT * self.atlas_window_height
-    and touch.y < HEIGHT - self.title_bar_height
+    and touch.y > HEIGHT * self.atlas_window_height + self.layer_item_height + 4
+    and touch.y < HEIGHT - self.title_bar_height - self.layer_item_height - 4
     then
         for layer_id, layer_object in ipairs(self.layer_stack) do
             
@@ -1027,6 +1183,7 @@ function world:touchLayer(touch)
             
             if layer_object.layer_button:touched(touch) and touch.state == ENDED then
                 
+                self:deselectLayer(self.layer_selected)
                 self:selectLayer(layer_id)
                 
                 if touch.tapCount >= 2 then
@@ -1056,20 +1213,21 @@ end
 function world:scrollLayerWindow(touch)
     local atlas_window = HEIGHT * self.atlas_window_height
     local layer_window = WIDTH * self.layer_window_width
-    local title_bar = self.title_bar_height + self.layer_item_height + 6
+    local top_bar = self.title_bar_height + self.layer_item_height + 4
+    local bottom_bar = self.layer_item_height + 4
     
     
     if touch.state == MOVING
     and touch.initX > WIDTH - layer_window
     and touch.initY > atlas_window
-    and touch.initY < HEIGHT - title_bar
+    and touch.initY < HEIGHT - top_bar
     then
         local items_length = self.layer_item_height * #self.layer_stack
         local curr_scroll = self.layer_scroll + touch.deltaY
         
-        if items_length > HEIGHT - atlas_window - title_bar
+        if items_length > HEIGHT - atlas_window - top_bar - bottom_bar
         and curr_scroll >= 0
-        and curr_scroll <= items_length - (HEIGHT - atlas_window - title_bar)
+        and curr_scroll <= items_length - (HEIGHT - atlas_window - top_bar - bottom_bar)
         then
             self.layer_scroll = curr_scroll
         end
@@ -1097,11 +1255,12 @@ end
 function world:drawLayerStack()
     local atlas_window = HEIGHT * self.atlas_window_height
     local layer_window = WIDTH * self.layer_window_width
-    local title_bar = self.title_bar_height + self.layer_item_height + 4
+    local top_bar = self.title_bar_height + self.layer_item_height + 4
+    local bottom_bar = self.layer_item_height + 4
     local origin_x = WIDTH - layer_window
-    local origin_y = HEIGHT - title_bar + self.layer_scroll
+    local origin_y = HEIGHT - top_bar + self.layer_scroll
     
-    clip(origin_x, atlas_window, layer_window, HEIGHT - atlas_window - title_bar)
+    clip(origin_x, atlas_window + bottom_bar, layer_window, HEIGHT - atlas_window - top_bar - bottom_bar)
     
     for layer_id, layer_object in ipairs(self.layer_stack) do
         local button = layer_object.layer_button
@@ -1149,6 +1308,13 @@ function world:drawLayerWindow()
     fill(paint.dark_gray)
     rect(WIDTH - window_width, atlas_window, window_width, HEIGHT - atlas_window - self.title_bar_height)
     
+    self:drawLayerStack()
+    
+    self.btn_layer_create:draw()
+    self.btn_layer_delete:draw()
+    self.btn_layer_sort_front:draw()
+    self.btn_layer_sort_back:draw()
+    
     popStyle()
 end
 
@@ -1191,8 +1357,8 @@ function world:resizeAtlasWindow(touch)
         end
         
         if window_height >= self.title_bar_height
-        and window_height <= HEIGHT - self.title_bar_height
         and window_height <= self.atlas_texture.height * self.atlas_zoom_y + self.title_bar_height - self.atlas_y
+        and height <= .75
         then
             self.atlas_window_height = height
         end
@@ -1458,11 +1624,7 @@ function world:draw()
     if self.debug then
         self:drawMapWindow()
         self:drawLayerWindow()
-        self:drawLayerStack()
         self:drawAtlasWindow()
-        
-        self.btn_layer_create:draw()
-        self.btn_layer_delete:draw()
         
         if self.alert then
             self.alert:draw()
@@ -1495,6 +1657,8 @@ function world:touched(touch)
         
         self.btn_layer_create:touched(touch)
         self.btn_layer_delete:touched(touch)
+        self.btn_layer_sort_front:touched(touch)
+        self.btn_layer_sort_back:touched(touch)
         self.btn_sprite_edit:touched(touch)
         
         if not self:panMapWindow(touch) then
@@ -1504,7 +1668,7 @@ function world:touched(touch)
                     self:moveAtlasBrush(touch)
                 end
                 self:scrollLayerWindow(touch)
-                self:touchLayer(touch)
+                self:touchSingleLayer(touch)
             end
         end
         
