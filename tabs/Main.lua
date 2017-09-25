@@ -4,7 +4,7 @@
 -- (c) 2017 kontakt@herrsch.de
 
 
-displayMode(FULLSCREEN)
+displayMode(OVERLAY)
 supportedOrientations(ANY)
 
 

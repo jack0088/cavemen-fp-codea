@@ -1,4 +1,7 @@
 
+-- This is the world object with all its related methods and routines
+-- it handles loading, displaying and editing rooms and a ton of other stuff
+
 
 world = {}
 
@@ -17,7 +20,12 @@ world.title_bar_height = 32
 
 world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
 
-world.level_file_path = nil
+
+
+
+world.room_tiles = {}
+world.room_entities = {}
+world.room_undos = {}
 
 
 
@@ -54,9 +62,7 @@ world.atlas_x = 0
 world.atlas_y = 0
 world.atlas_zoom_x = 6
 world.atlas_zoom_y = 6
-world.atlas_window_height = .1 -- as percentage multiplier
-
-
+world.atlas_window_height = .25 -- as percentage multiplier
 
 
 
@@ -64,7 +70,8 @@ world.atlas_window_height = .1 -- as percentage multiplier
 
 
 world.layer_stack = {}
-world.layer_selected = nil -- in ascending order
+world.layer_settings = {} -- on how to render the layer
+world.layer_selected = nil
 world.layer_scroll = 0
 world.layer_item_height = world.title_bar_height
 world.layer_window_width = .125 -- as percentage multiplier
@@ -306,10 +313,9 @@ end
 
 function world:getWorldPosition(screen_x, screen_y)
     return
-        (screen_x + self.camera_x - self.camera_pivot_x * WIDTH) / self.camera_zoom_x,
-        (screen_y + self.camera_y - self.camera_pivot_y * HEIGHT) / self.camera_zoom_y
+        (WIDTH * self.camera_pivot_x + self.camera_x - screen_x) / -self.camera_zoom_x,
+        (HEIGHT * self.camera_pivot_y + self.camera_y - screen_y) / -self.camera_zoom_y
 end
-
 
 
 
@@ -342,20 +348,6 @@ end
 
 
 
--- Calculate by how many tiles and chunks the camera has been moved
--- The resulting x and y position represents at which tile or chunk you are in the world
- 
-function world:getCameraOffset()
-    local tiles_x = math.floor(self.camera_x / (self.camera_zoom_x * self.tile_width))
-    local tiles_y = math.floor(self.camera_y / (self.camera_zoom_y * self.tile_height))
-    local chunks_x = math.floor(tiles_x / self.chunk_width)
-    local chunks_y = math.floor(tiles_y / self.chunk_height)
-    return
-        tiles_x,
-        tiles_y,
-        chunks_x,
-        chunks_y
-end
 
 
 
@@ -363,22 +355,80 @@ end
 
 
 
-
-
-
-
-
-
-function world:getAtlasTileIndex(x, y)
+function world:getTileAtlasIndexPosition(x, y)
     local window_height = HEIGHT * self.atlas_window_height - self.title_bar_height
     local tile_width = self.tile_width * self.atlas_zoom_x
     local tile_height = self.tile_height * self.atlas_zoom_y
     local tile_id_x = math.floor((x - self.atlas_x) / tile_width)
     local tile_id_y = math.floor((window_height - y + self.atlas_y) / tile_height)
     return
-        tile_id_x,
-        tile_id_y
+        tile_id_x, -- col
+        tile_id_y -- row
 end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:getTileWorldIndexPosition(screen_x, screen_y)
+    local world_x, world_y = self:getWorldPosition(screen_x, screen_y)
+    return
+        math.floor(world_x / self.tile_width), -- col
+        math.floor(world_y / self.tile_height) -- row
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:getChunkWorldIndexPosition(screen_x, screen_y)
+    local world_x, world_y = self:getWorldPosition(screen_x, screen_y)
+    return
+        math.floor(world_x / (self.tile_width * self.chunk_width)), -- col
+        math.floor(world_y / (self.tile_height * self.chunk_height)) -- row
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:getVisibleChunkIndexPositions()
+    local screen_origin_x, screen_origin_y = self:getWorldPosition(0, 0) -- map screen origin to world coordinates
+    --return
+    print(
+        screen_origin_x, screen_origin_y
+        --math.floor(screen_origin_x / self.tile_width), -- col
+        --math.floor(screen_origin_y / self.tile_height) -- row
+    )
+end
+
+
+
+
 
 
 
@@ -401,7 +451,7 @@ function world:getTileIndicesEclosedByBrushBounds()
         end
     end
     
-    return indices
+    return indices -- single numbers (not cols and rows)
 end
 
 
@@ -607,10 +657,13 @@ end
 
 
 
-function world:renderChunk(world_x, world_y)
+function world:renderChunk(world_x, world_y) -- (re-)render chunk at given world position
+    --[[
+    local width = self.tile_width * self.chunk_width
+    local height = self.tile_height * self.chunk_height
     local canvas = mesh()
-    canvas.texture = image(self.chunk_width, self.chunk_height)
-    canvas:addRect(self.tileWidth/2, self.tileHeight/2, self.tileWidth, self.tileHeight)
+    canvas.texture = image(width, height)
+    canvas:addRect(width/2, height/2, width, height)
     
     setContext(canvas.texture)
     pushMatrix()
@@ -624,8 +677,205 @@ function world:renderChunk(world_x, world_y)
     setContext()
     popMatrix()
     
-    return canvas
+    --self.chunks[id] = canvas
+    --]]
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:paintTilesOntoMap(touch)
+    --local delta_shift_x = (touch.x - touch.initX) % (self.tile_width * self.camera_zoom_x)
+    --local delta_shift_y = (touch.y - touch.initY) % (self.tile_height * self.camera_zoom_y)
+    local curr_tile = vec2(self:getTileWorldIndexPosition(touch.x, touch.y))
+    
+    
+    -- there is a layer to act on?
+    if self.layer_selected
+    -- initially touched viewport?
+    and (touch.initX < WIDTH - WIDTH * self.layer_window_width
+    and touch.initY > HEIGHT * self.atlas_window_height
+    and touch.initY < HEIGHT - self.title_bar_height)
+    -- and current touch still inside the viewport?
+    and (touch.x < WIDTH - WIDTH * self.layer_window_width
+    and touch.y > HEIGHT * self.atlas_window_height
+    and touch.y < HEIGHT - self.title_bar_height)
+    -- just tapped?
+    and ((touch.state == ENDED
+    and touch.initX == touch.x
+    and touch.initY == touch.y)
+    -- or moved finger after certain duration?
+    or (touch.state == MOVING
+    and (self.paint_tiles_onto_map or touch.duration > .25)))
+    -- but only when touch moved past the current tile
+    and (not self.paint_tile
+    or self.paint_tile ~= curr_tile)
+    then
+        
+        local undo_batch = {}
+        
+        -- unwrap brush into single tiles
+        
+        for y = 0, self.brush_height - 1 do
+            for x = 0, self.brush_width - 1 do
+                
+                -- calculate final values for the current tile in brush
+                
+                local tile_template = {
+                    -- world position of the tile
+                    x = curr_tile.x + x,
+                    y = curr_tile.y - y,
+                    -- self.atlas_texture index position
+                    col = self.brush_x + x,
+                    row = self.brush_y + y
+                }
+                
+                -- check current layer to see wether painted tile position already exist in self.room_tiles
+                
+                local tile_chunk = vec2(self:getChunkWorldIndexPosition(tile_template.x, tile_template.y))
+                local position_taken, by_tile = self:tileWorldPositionAlreadyTaken(tile_template.x, tile_template.y)
+                
+                if not position_taken -- tile not exist yet?
+                or (by_tile.col ~= col -- or exists but is different tile
+                and by_tile.row ~= row)
+                then
+                    -- create new coroutine thread to register and render tile
+                    
+                    exec(function()
+                        if by_tile then
+                            -- tile position already existed so just re-assign/update
+                            by_tile = tile_template
+                            
+                            -- cache undo action for this tile
+                            table.insert(undo_batch, function()
+                                by_tile = by_tile -- revert back to tile which was there before current painting action
+                                self:renderChunk(tile_chunk.x, tile_chunk.y)
+                            end)
+                        else
+                            -- tile position did not exist so create entirely
+                            table.insert(self.room_tiles, tile_template)
+                            table.insert(self.layer_stack[self.layer_selected].room_tiles, #self.room_tiles)
+                            
+                            -- cache undo action for this tile
+                            table.insert(undo_batch, function()
+                                -- delete again on undo because tile did not exist before
+                                self.room_tiles[#self.room_tiles] = nil
+                                self.layer_stack[self.layer_selected].room_tiles = nil
+                                self:renderChunk(tile_chunk.x, tile_chunk.y)
+                            end)
+                        end
+                        
+                        -- re-render chunk to which this tile belongs
+                        
+                        self:renderChunk(tile_chunk.y, tile_chunk.y)
+                        
+                        --coroutine.yield()
+                    end)
+                end
+                
+            end
+        end
+        
+        -- register an undo after painting action finished completely
+        
+        exec(function()
+            table.insert(self.room_undos, undo_batch)
+            self:removeUndoOverflow()
+        end)
+        
+        self.paint_tile = curr_tile
+        self.paint_tiles_onto_map = true
+        
+        return true
+    end
+    
+    
+    if touch.state == ENDED then
+        self.paint_tile = nil
+        self.paint_tiles_onto_map = nil
+    end
+    
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:undoPaintAction()
+    local latest = #self.room_undos
+    self.room_undos[latest]() -- run undo action
+    table.remove(self.room_undos, latest)
+end
+
+
+
+
+
+
+
+
+
+
+
+
+function world:removeUndoOverflow() -- forget undos that are too old
+    while #self.room_undos > 10 do -- clamp undo history to n undos
+        table.remove(self.room_undos, 1)
+    end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:tileWorldPositionAlreadyTaken(index_x, index_y)
+    for layer_id, layer_object in ipairs(self.layer_stack) do
+        for _, tile_reference in ipairs(layer_object.room_tiles) do
+            if self.room_tiles[tile_reference].x == index_x
+            and self.room_tiles[tile_reference].y == index_y
+            then
+                return
+                    true,
+                    self.room_tiles[tile_reference] -- also return the find
+            end
+        end
+    end
+    return false
+end
+
+
+
 
 
 
@@ -775,6 +1025,9 @@ end
 
 
 function world:drawMapWindow()
+    local viewport_cx = self.camera_pivot_x * WIDTH
+    local viewport_cy = self.camera_pivot_y * HEIGHT
+    
     self:centerCameraPivot()
     
     pushStyle()
@@ -782,14 +1035,28 @@ function world:drawMapWindow()
     font("HelveticaNeue-Light")
     fontSize(18)
     
-    translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
+    translate(viewport_cx, viewport_cy)
     translate(self.camera_x, self.camera_y)
     scale(self.camera_zoom_x, self.camera_zoom_y)
     
-    rect(0,0,8,8)
     
+    -- TODO draw chunks and tiles here
+    
+    
+    -- draw grid
     resetMatrix()
     self:drawMapGrid()
+    
+    
+    do -- display current camera center position
+        local r = 4 -- radius
+        noFill()
+        stroke(paint.white)
+        strokeWidth(1)
+        line(viewport_cx - r, viewport_cy - r, viewport_cx + r, viewport_cy + r)
+        line(viewport_cx - r, viewport_cy + r, viewport_cx + r, viewport_cy - r)
+    end
+    
     
     -- title bar
     noStroke()
@@ -807,8 +1074,10 @@ function world:drawMapWindow()
         fill(paint.black)
     end
     
-    local offset_x, offset_y = self:getCameraOffset()
-    text(string.format("position %.0f, %.0f", -offset_x, -offset_y), WIDTH/2, HEIGHT - self.title_bar_height/2)
+    -- tile position at which the camera curretnly is
+    
+    local offset_x, offset_y = self:getTileWorldIndexPosition(viewport_cx, viewport_cy)
+    text(string.format("position %.0f, %.0f", offset_x, offset_y), WIDTH/2, HEIGHT - self.title_bar_height/2)
     
     popMatrix()
     popStyle()
@@ -900,14 +1169,35 @@ function world:drawAtlasWindow()
     
     
     do -- full layer name which the brush affecting
+        local txt, w, h
+        
         if self.layer_selected then
             local layer_toggle = self.layer_stack[self.layer_selected].visibility_toggle
             local layer_button = self.layer_stack[self.layer_selected].layer_button
             local is_hidden = layer_toggle.value < layer_toggle.max
             local prefix = is_hidden and "invisible" or "altering"
-            local txt = string.format(prefix.." %s", layer_button.title)
-            local w, h = textSize(txt)
-            text(txt, WIDTH - w/2 - 16, window_height - self.title_bar_height/2)
+            txt = string.format(prefix.." %s", layer_button.title)
+            w, h = textSize(txt)
+        else
+            fill(paint.blue)
+            txt = "no layer"
+            w, h = textSize(txt)
+        end
+        
+        text(txt, WIDTH - w/2 - 16, window_height - self.title_bar_height/2)
+        
+        
+        -- indicator that coroutine tasks are being executed
+        
+        if #coroutine_thread_queue > 0 then
+            pushMatrix()
+            local angle = 500 * ElapsedTime
+            translate(WIDTH - w - 32, window_height - self.title_bar_height/2)
+            rotate(-angle)
+            fill(paint.blue.r, paint.blue.g, paint.blue.b, angle%255)
+            rectMode(CENTER)
+            rect(0, 0, self.title_bar_height/2, self.title_bar_height/2)
+            popMatrix()
         end
     end
     
@@ -978,8 +1268,6 @@ function world:createNewLayer()
     local button = UIButton(layer_name, 0, 0, WIDTH * self.layer_window_width - self.layer_item_height, self.layer_item_height)
     button.text_color = paint.white
     button.bg_color = paint.transparent
-    button.text_hover_color = paint.white
-    button.bg_hover_color = paint.transparent
     
     
     function button.draw(this)
@@ -1005,18 +1293,8 @@ function world:createNewLayer()
     end
     
     
-    function button.touched(this, touch) -- override default handler to support state propagation
-        if touch.state == BEGAN
-        and touch.x > this.x and touch.x < this.x + this.width
-        and touch.y > this.y and touch.y < this.y + this.height
-        then
-            this.is_active = true
-            return true
-        end
-        
+    function button.touched(this, touch) -- override default handler to support state propagation and ignore hover color changes
         if touch.state == ENDED then
-            this.is_active = false
-            
             if touch.initX > this.x and touch.initX < this.x + this.width
             and touch.initY > this.y and touch.initY < this.y + this.height
             and touch.x > this.x and touch.x < this.x + this.width
@@ -1037,7 +1315,7 @@ function world:createNewLayer()
     local object = {
         visibility_toggle = toggle,
         layer_button = button,
-        tile_list = {}
+        room_tiles = {}
     }
     
     table.insert(self.layer_stack, stack_pos, object)
@@ -1116,13 +1394,15 @@ end
 
 
 function world:shiftSelectedLayerUp()
-    local object = self.layer_stack[self.layer_selected]
-    local stack_pos = math.max(1, self.layer_selected - 1)
-    
-    self:deselectLayer(self.layer_selected)
-    table.remove(self.layer_stack, self.layer_selected)
-    table.insert(self.layer_stack, stack_pos, object)
-    self:selectLayer(stack_pos)
+    if self.layer_selected then
+        local object = self.layer_stack[self.layer_selected]
+        local stack_pos = math.max(1, self.layer_selected - 1)
+        
+        self:deselectLayer(self.layer_selected)
+        table.remove(self.layer_stack, self.layer_selected)
+        table.insert(self.layer_stack, stack_pos, object)
+        self:selectLayer(stack_pos)
+    end
 end
 
 
@@ -1137,13 +1417,15 @@ end
 
 
 function world:shiftSelectedLayerDown()
-    local object = self.layer_stack[self.layer_selected]
-    local stack_pos = math.min(#self.layer_stack, self.layer_selected + 1)
-    
-    self:deselectLayer(self.layer_selected)
-    table.remove(self.layer_stack, self.layer_selected)
-    table.insert(self.layer_stack, stack_pos, object)
-    self:selectLayer(stack_pos)
+    if self.layer_selected then
+        local object = self.layer_stack[self.layer_selected]
+        local stack_pos = math.min(#self.layer_stack, self.layer_selected + 1)
+        
+        self:deselectLayer(self.layer_selected)
+        table.remove(self.layer_stack, self.layer_selected)
+        table.insert(self.layer_stack, stack_pos, object)
+        self:selectLayer(stack_pos)
+    end
 end
 
 
@@ -1438,18 +1720,16 @@ function world:panMapWindow(touch)
     local layer_window = WIDTH * self.layer_window_width
     
     
-    if touch.state == BEGAN
-    and touch.x < WIDTH - layer_window
-    and touch.y > atlas_window
-    and touch.y < HEIGHT - self.title_bar_height
+    if touch.state == MOVING
+    and touch.initX < WIDTH - layer_window
+    and touch.initY > atlas_window
+    and touch.initY < HEIGHT - self.title_bar_height
+    and (self.pan_map_window or touch.duration < .25)
     then
-        self.pan_map_window = true
-        return true
-    end
-    
-    if touch.state == MOVING and self.pan_map_window then
         self.camera_x = self.camera_x + touch.deltaX
         self.camera_y = self.camera_y + touch.deltaY
+        self.pan_map_window = true
+        self:getVisibleChunkIndexPositions()
         return true
     end
     
@@ -1485,7 +1765,7 @@ function world:moveAtlasBrush(touch)
     and touch.x < self.atlas_x + self.atlas_texture.width * self.atlas_zoom_x
     and touch.initY < HEIGHT * self.atlas_window_height - self.title_bar_height
     then
-        self.brush_x, self.brush_y = self:getAtlasTileIndex(touch.x, touch.y)
+        self.brush_x, self.brush_y = self:getTileAtlasIndexPosition(touch.x, touch.y)
         self:pullBrushIntoAtlasBounds()
         return true
     end
@@ -1655,6 +1935,7 @@ function world:touched(touch)
             return
         end
         
+        
         self:resetCameraPosition(touch)
         self:minimizeAtlasWindow(touch)
         
@@ -1664,21 +1945,88 @@ function world:touched(touch)
         self.btn_layer_sort_back:touched(touch)
         self.btn_sprite_edit:touched(touch)
         
-        if not self:panMapWindow(touch) then
-            if not self:resizeAtlasWindow(touch) then
-                if not self:resizeAtlasBrush(touch) then
-                    self:panAtlasWindow(touch)
-                    self:moveAtlasBrush(touch)
+        
+        if not self:resizeAtlasWindow(touch) then
+            if not self:panMapWindow(touch) then
+                if not self:paintTilesOntoMap(touch) then
+                    if not self:resizeAtlasBrush(touch) then
+                        self:panAtlasWindow(touch)
+                        self:moveAtlasBrush(touch)
+                    end
+                    self:scrollLayerWindow(touch)
+                    self:touchSingleLayer(touch)
                 end
-                self:scrollLayerWindow(touch)
-                self:touchSingleLayer(touch)
             end
         end
+        
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)
         end
         
     end
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- This is the base class for any layer entity
+-- inherit from it and extend to meet your needs
+
+
+WorldEntity = class()
+
+
+function WorldEntity:init(x, y, width, height, texture)
+    self.sprite = GSprite{
+        texture = texture,
+        spritesize = vec2(width, height),
+        position = vec2(x, y)
+    }
+end
+
+
+function WorldEntity:draw()
+    --self.sprite.texture = world.atlas_texture
+    self.sprite:draw()
+end
+
+
+function WorldEntity:touched(touch)
+    local shift_x = self.pivot.x * self.spritesize.x
+    local shift_y = self.pivot.y * self.spritesize.y
+    local rem_x = self.spritesize.x - shift_x
+    local rem_y = self.spritesize.y - shift_y
+    
+    local left = self.position.x - shift_x
+    local bottom = self.position.y - shift_y
+    local right = self.position.x + rem_x
+    local top = self.position.y + rem_y
+    
+    
+    if touch.x > left and touch.x < right
+    and touch.y > bottom and touch.y < top
+    then
+        return true
+    end
+    
+    return false
 end
 

@@ -941,37 +941,54 @@ end
 
 
 
-do -- run scripted sequence of commands after each other
-    -- Use: exec(wait, 1) exec(print, "waited")
+
+
+
+
+
+
+-- With this functions you can create a thread (which is a namespace for a queue)
+-- then you can use exec() to register functions that will run on this thread
+-- these functions will be turned into coroutines automatically for you and run in a sequence
+
+do
+    local thread_stack = {}
     
-    local thread_queue = {}
     
-    function thread_update()
-        if #thread_queue > 0 then
-            if coroutine.status(thread_queue[1]) == "dead" then
-                table.remove(thread_queue, 1)
+    function createThread()
+        table.insert(thread_stack, {})
+        return thread_stack[#thread_stack]
+    end
+    
+    
+    function updateThreadQueue(thread) -- run this on each frame e.g. draw()
+        if thread and #thread > 0 then -- assert siliently
+            if coroutine.status(thread[1]) == "dead" then
+                table.remove(thread, 1)
             else
-                coroutine.resume(thread_queue[1], thread_queue[1])
+                coroutine.resume(thread[1])
             end
         end
     end
     
     
-    function exec(func, ...) -- use this to queue a function call
+    function exec(thread, func, ...)
+        assert(thread, "Target coroutine thread could not be found!")
         local params = {...}
-        local thread = function(self) func(self, unpack(params)) end
-        table.insert(thread_queue, coroutine.create(thread))
+        local routine = function() func(unpack(params)) end
+        table.insert(thread, coroutine.create(routine))
     end
     
     
-    function wait(self, time) -- use this function to pause/interrupt execution of the queue
-        local term = ElapsedTime + time
-        while ElapsedTime <= term do
-            if type(self) == "thread" then
+    function wait(thread, time)
+        exec(thread, function() -- run on thread
+            local term = ElapsedTime + time
+            while ElapsedTime <= term do
                 coroutine.yield()
             end
-        end
+        end)
     end
+    
 end
 
 
@@ -983,9 +1000,12 @@ end
 
 
 
--- extention to detect device shaking events
--- extension to execute commands in sequence
-do
+
+
+
+
+
+do -- extention to detect device shaking events
     local _draw = draw
     local eventTimer = .3 -- listener lifetime
     local intensity = 1.0 -- min. shake intensity to trigger this event
@@ -1013,7 +1033,6 @@ do
         end
         
         if _draw then
-            thread_update()
             _draw()
         end
     end
