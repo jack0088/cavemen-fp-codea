@@ -25,6 +25,7 @@ world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
 
 world.room_tiles = {}
 world.room_entities = {}
+world.room_tasks = createThread()
 world.room_undos = {}
 
 
@@ -75,33 +76,6 @@ world.layer_selected = nil
 world.layer_scroll = 0
 world.layer_item_height = world.title_bar_height
 world.layer_window_width = .125 -- as percentage multiplier
-
-
-
-
-
-
-
-
-
-
-world.btn_sprite_edit = UIButton("Sprite")
-world.btn_sprite_edit.height = world.title_bar_height
-world.btn_sprite_edit.text_color = paint.white
-world.btn_sprite_edit.bg_color = paint.orange
-world.btn_sprite_edit.text_hover_color = paint.white
-world.btn_sprite_edit.bg_hover_color = paint.blue
-
-
-function world.btn_sprite_edit:draw()
-    self.y = HEIGHT * world.atlas_window_height - world.title_bar_height/2 - self.height/2
-    UIButton.draw(self)
-end
-
-
-function world.btn_sprite_edit.callback()
-    -- TODO create sprite editor and link it here
-end
 
 
 
@@ -327,14 +301,15 @@ end
 
 
 -- Convert world coordinates to screen coordinates
+-- When checkin if the whole shape is visisble, you could pass all (four) corners to this method and see if any is on screen 
 
 function world:getScreenPosition(world_x, world_y)
-    local pnt_x = self.camera_zoom_x * world_x - self.camera_x + self.camera_pivot_x * WIDTH
-    local pnt_y = self.camera_zoom_y * world_y - self.camera_y + self.camera_pivot_y * HEIGHT
-    local is_inside = pnt_x > 0 and pnt_x < WIDTH and pnt_y > 0 and pnt_y < HEIGHT
+    local pnt_x = world_x * self.camera_zoom_x - self.camera_x + WIDTH * self.camera_pivot_x
+    local pnt_y = HEIGHT * self.camera_pivot_y - world_y * self.camera_zoom_y + self.camera_y
+    local is_inside = pnt_x >= 0 and pnt_x <= WIDTH and pnt_y >= 0 and pnt_y <= HEIGHT
     return
-        pntX,
-        pntY,
+        pnt_x,
+        pnt_y,
         is_inside
 end
 
@@ -418,12 +393,14 @@ end
 
 function world:getVisibleChunkIndexPositions()
     local screen_origin_x, screen_origin_y = self:getWorldPosition(0, 0) -- map screen origin to world coordinates
-    --return
+    
+    --[[
     print(
         screen_origin_x, screen_origin_y
         --math.floor(screen_origin_x / self.tile_width), -- col
         --math.floor(screen_origin_y / self.tile_height) -- row
     )
+    --]]
 end
 
 
@@ -702,6 +679,8 @@ function world:paintTilesOntoMap(touch)
     
     -- there is a layer to act on?
     if self.layer_selected
+    -- only if layer is not hidden
+    and self.layer_stack[self.layer_selected].visibility_toggle.value == self.layer_stack[self.layer_selected].visibility_toggle.max
     -- initially touched viewport?
     and (touch.initX < WIDTH - WIDTH * self.layer_window_width
     and touch.initY > HEIGHT * self.atlas_window_height
@@ -751,7 +730,7 @@ function world:paintTilesOntoMap(touch)
                 then
                     -- create new coroutine thread to register and render tile
                     
-                    exec(function()
+                    exec(self.room_tasks, function()
                         if by_tile then
                             -- tile position already existed so just re-assign/update
                             by_tile = tile_template
@@ -788,7 +767,7 @@ function world:paintTilesOntoMap(touch)
         
         -- register an undo after painting action finished completely
         
-        exec(function()
+        exec(self.room_tasks, function()
             table.insert(self.room_undos, undo_batch)
             self:removeUndoOverflow()
         end)
@@ -824,7 +803,7 @@ end
 
 function world:undoPaintAction()
     local latest = #self.room_undos
-    self.room_undos[latest]() -- run undo action
+    exec(self.room_tasks, self.room_undos[latest]) -- run undo action on separate thread
     table.remove(self.room_undos, latest)
 end
 
@@ -1178,6 +1157,10 @@ function world:drawAtlasWindow()
             local prefix = is_hidden and "invisible" or "altering"
             txt = string.format(prefix.." %s", layer_button.title)
             w, h = textSize(txt)
+            
+            if is_hidden then
+                fill(paint.blue)
+            end
         else
             fill(paint.blue)
             txt = "no layer"
@@ -1189,22 +1172,25 @@ function world:drawAtlasWindow()
         
         -- indicator that coroutine tasks are being executed
         
-        if #coroutine_thread_queue > 0 then
+        if #self.room_tasks > 0
+        or not self.layer_selected
+        or (self.layer_selected
+        and self.layer_stack[self.layer_selected].visibility_toggle.value < self.layer_stack[self.layer_selected].visibility_toggle.max)
+        then
             pushMatrix()
             local angle = 500 * ElapsedTime
             translate(WIDTH - w - 32, window_height - self.title_bar_height/2)
-            rotate(-angle)
-            fill(paint.blue.r, paint.blue.g, paint.blue.b, angle%255)
+            
+            if #self.room_tasks > 0 then -- rotate when executing tasks otherwise just blink
+                rotate(-angle)
+            end
+            
+            fill(paint.blue.r, paint.blue.g, paint.blue.b, angle % 255)
             rectMode(CENTER)
             rect(0, 0, self.title_bar_height/2, self.title_bar_height/2)
             popMatrix()
         end
     end
-    
-    
-    -- buttons
-    self.btn_sprite_edit:draw()
-    
     
     popStyle()
 end
@@ -1900,9 +1886,10 @@ end
 
 function world:draw()
     pushStyle()
-    
     background(self.bg_color)
     noSmooth()
+    
+    updateThreadQueue(self.room_tasks)
     
     if self.debug then
         self:drawMapWindow()
@@ -1943,7 +1930,6 @@ function world:touched(touch)
         self.btn_layer_delete:touched(touch)
         self.btn_layer_sort_front:touched(touch)
         self.btn_layer_sort_back:touched(touch)
-        self.btn_sprite_edit:touched(touch)
         
         
         if not self:resizeAtlasWindow(touch) then

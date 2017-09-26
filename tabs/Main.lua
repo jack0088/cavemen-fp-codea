@@ -14,9 +14,6 @@ supportedOrientations(ANY)
 
 
 function setup()
-    parameter.action("DeleteProjectData", function() clearProjectData() end)
-    
-    
     local size = math.max(WIDTH, HEIGHT)
     display = mesh()
     display.texture = image(size, size)
