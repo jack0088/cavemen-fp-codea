@@ -25,8 +25,9 @@ world.sfx_mouse_click = "Dropbox:mouse_pressUp_hard"
 
 world.room_tiles = {}
 world.room_entities = {}
-world.room_tasks = createThread()
 world.room_undos = {}
+world.room_action_queue = createThread()
+world.room_render_queue = createThread()
 
 
 
@@ -392,15 +393,18 @@ end
 
 
 function world:getVisibleChunkIndexPositions()
-    local screen_origin_x, screen_origin_y = self:getWorldPosition(0, 0) -- map screen origin to world coordinates
+    local tw, th = self.tile_width, self.tile_height
+    local x1, y1 = self:getChunkWorldIndexPosition(-tw, -th) -- map screen to world coordinates
+    local x2, y2 = self:getChunkWorldIndexPosition(WIDTH - tw, HEIGHT - th)
+    local chunks = {}
     
-    --[[
-    print(
-        screen_origin_x, screen_origin_y
-        --math.floor(screen_origin_x / self.tile_width), -- col
-        --math.floor(screen_origin_y / self.tile_height) -- row
-    )
-    --]]
+    for y = y1, y2 do -- collect all chunks in screen range
+        for x = x1, x2 do
+            table.insert(chunks, {x = x, y = y})
+        end
+    end
+    
+    return chunks
 end
 
 
@@ -721,7 +725,7 @@ function world:paintTilesOntoMap(touch)
                 
                 -- check current layer to see wether painted tile position already exist in self.room_tiles
                 
-                local tile_chunk = vec2(self:getChunkWorldIndexPosition(tile_template.x, tile_template.y))
+                local tile_chunk = vec2(self:getChunkWorldIndexPosition(tile_template.x, tile_template.y)) -- to which this tile belongs
                 local position_taken, by_tile = self:tileWorldPositionAlreadyTaken(tile_template.x, tile_template.y)
                 
                 if not position_taken -- tile not exist yet?
@@ -730,7 +734,7 @@ function world:paintTilesOntoMap(touch)
                 then
                     -- create new coroutine thread to register and render tile
                     
-                    exec(self.room_tasks, function()
+                    exec(self.room_action_queue, function()
                         if by_tile then
                             -- tile position already existed so just re-assign/update
                             by_tile = tile_template
@@ -767,7 +771,7 @@ function world:paintTilesOntoMap(touch)
         
         -- register an undo after painting action finished completely
         
-        exec(self.room_tasks, function()
+        exec(self.room_action_queue, function()
             table.insert(self.room_undos, undo_batch)
             self:removeUndoOverflow()
         end)
@@ -802,9 +806,11 @@ end
 
 
 function world:undoPaintAction()
-    local latest = #self.room_undos
-    exec(self.room_tasks, self.room_undos[latest]) -- run undo action on separate thread
-    table.remove(self.room_undos, latest)
+    exec(self.room_action_queue, function() -- run on separate thread
+        local latest = #self.room_undos
+        self.room_undos[latest]() -- run reverse action
+        table.remove(self.room_undos, latest)
+    end)
 end
 
 
@@ -1045,7 +1051,7 @@ function world:drawMapWindow()
         fill(paint.orange)
     end
     
-    rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
+    --rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
     
     fill(paint.white)
     
@@ -1172,7 +1178,7 @@ function world:drawAtlasWindow()
         
         -- indicator that coroutine tasks are being executed
         
-        if #self.room_tasks > 0
+        if #self.room_action_queue > 0
         or not self.layer_selected
         or (self.layer_selected
         and self.layer_stack[self.layer_selected].visibility_toggle.value < self.layer_stack[self.layer_selected].visibility_toggle.max)
@@ -1181,7 +1187,7 @@ function world:drawAtlasWindow()
             local angle = 500 * ElapsedTime
             translate(WIDTH - w - 32, window_height - self.title_bar_height/2)
             
-            if #self.room_tasks > 0 then -- rotate when executing tasks otherwise just blink
+            if #self.room_action_queue > 0 then -- rotate when executing tasks otherwise just blink
                 rotate(-angle)
             end
             
@@ -1893,8 +1899,8 @@ function world:draw()
     
     if self.debug then
         self:drawMapWindow()
-        self:drawLayerWindow()
-        self:drawAtlasWindow()
+        --self:drawLayerWindow()
+        --self:drawAtlasWindow()
         
         if self.alert then
             self.alert:draw()
@@ -1948,6 +1954,10 @@ function world:touched(touch)
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)
+            
+            print()
+            printf(self:getVisibleChunkIndexPositions())
+            print()
         end
         
     end
