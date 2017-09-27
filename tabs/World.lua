@@ -391,6 +391,32 @@ end
 
 
 
+function world:isPointInsideChunk(pnt_x, pnt_y, chunk_x, chunk_y) -- compare both world coordinates
+    local width = self.tile_width * self.chunk_width
+    local height = self.tile_height * self.chunk_height
+    
+    if pnt_x > chunk_x and pnt_x < chunk_x + width
+    and pnt_y > chunk_y and pnt_y < chunk_y + height
+    then
+        return true
+    end
+
+    return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function world:getVisibleChunkIndexPositions()
     local tw, th = self.tile_width, self.tile_height
@@ -589,14 +615,12 @@ end
 function world:pullAtlasIntoAtlasWindowBounds()
     local atlas_width = self.atlas_texture.width * self.atlas_zoom_x
     
-    if ( -- atlas_texture.width smaller than WIDTH?
-        atlas_width < WIDTH
-        and (self.atlas_x <= 0 or self.atlas_x >= WIDTH or self.atlas_x + atlas_width <= 0 or self.atlas_x + atlas_width >= WIDTH)
-    )
-    or ( -- atlas_texture.width larger than WIDTH?
-        atlas_width > WIDTH
-        and (self.atlas_x > 0 or self.atlas_x + atlas_width < WIDTH)
-    )
+    -- atlas_texture.width smaller than WIDTH?
+    if (atlas_width < WIDTH
+    and (self.atlas_x <= 0 or self.atlas_x >= WIDTH or self.atlas_x + atlas_width <= 0 or self.atlas_x + atlas_width >= WIDTH))
+    -- atlas_texture.width larger than WIDTH?
+    or (atlas_width > WIDTH
+    and (self.atlas_x > 0 or self.atlas_x + atlas_width < WIDTH))
     then
         self.atlas_x = 0
     end
@@ -638,28 +662,45 @@ end
 
 
 
+
+
+
 function world:renderChunk(world_x, world_y) -- (re-)render chunk at given world position
-    --[[
-    local width = self.tile_width * self.chunk_width
-    local height = self.tile_height * self.chunk_height
-    local canvas = mesh()
-    canvas.texture = image(width, height)
-    canvas:addRect(width/2, height/2, width, height)
     
-    setContext(canvas.texture)
-    pushMatrix()
-    resetMatrix()
-    translate(-(self.tileWidth * self.chunkWidth * region.chunk.x), -(self.tileHeight * self.chunkHeight * region.chunk.y))
-    
-    for _, tile in ipairs(region.tile) do
-        --sprite + clip or just mesh?
+    for layer_id = #self.layer_stack, 1, -1 do -- loop layers in reverse because of drawing order
+        local layer_object = self.layer_stack[layer_id]
+        local layer_name = layer_object.layer_button.title
+        local layer_class = WorldEntity -- default!
+        local layer_merge = true -- default!
+
+        if layer_object.visibillity_toggle.value == layer_object.visibility_toggle.max then
+            for _, room_tile_id in ipairs(layer_object.layer_button.room_tiles) do
+                local room_tile = self.room_tiles[room_tile_id]
+                
+                -- check each tile on current layer to see if it overlaps the current chunk
+
+                if self:isPointInsideChunk(room_tile.x, room_tile.y, world_x, world_y) -- bottom left
+                or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y, world_x, world_y) -- bottom right
+                or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y + self.tile_height, world_x, world_y) -- top right
+                or self:isPointInsideChunk(room_tile.x, room_tile.y + self.tile_height, world_x, world_y) -- top left
+                then
+                    -- override default layer setting if any
+
+                    for _, setting in ipairs(self.layer_settings) do
+                        if setting.layer_name = layer_name then
+                            layer_class = setting.class or layer_class
+                            layer_merge = setting.merge or layer_merge
+                            break
+                        end
+                    end
+
+
+                    --draw onto canvas
+                end
+            end
+        end
     end
-    
-    setContext()
-    popMatrix()
-    
-    --self.chunks[id] = canvas
-    --]]
+
 end
 
 
@@ -675,11 +716,14 @@ end
 
 
 
+
+
+
+
 function world:paintTilesOntoMap(touch)
-    --local delta_shift_x = (touch.x - touch.initX) % (self.tile_width * self.camera_zoom_x)
-    --local delta_shift_y = (touch.y - touch.initY) % (self.tile_height * self.camera_zoom_y)
+
     local curr_tile = vec2(self:getTileWorldIndexPosition(touch.x, touch.y))
-    
+
     
     -- there is a layer to act on?
     if self.layer_selected
@@ -719,8 +763,8 @@ function world:paintTilesOntoMap(touch)
                     x = curr_tile.x + x,
                     y = curr_tile.y - y,
                     -- self.atlas_texture index position
-                    col = self.brush_x + x,
-                    row = self.brush_y + y
+                    sprite_col = self.brush_x + x,
+                    sprite_row = self.brush_y + y
                 }
                 
                 -- check current layer to see wether painted tile position already exist in self.room_tiles
@@ -729,8 +773,8 @@ function world:paintTilesOntoMap(touch)
                 local position_taken, by_tile = self:tileWorldPositionAlreadyTaken(tile_template.x, tile_template.y)
                 
                 if not position_taken -- tile not exist yet?
-                or (by_tile.col ~= col -- or exists but is different tile
-                and by_tile.row ~= row)
+                or (by_tile.sprite_col ~= tile_template.sprite_col -- or exists but is different tile
+                and by_tile.sprite_row ~= tile_template.sprite_row)
                 then
                     -- create new coroutine thread to register and render tile
                     
@@ -741,8 +785,13 @@ function world:paintTilesOntoMap(touch)
                             
                             -- cache undo action for this tile
                             table.insert(undo_batch, function()
-                                by_tile = by_tile -- revert back to tile which was there before current painting action
-                                self:renderChunk(tile_chunk.x, tile_chunk.y)
+                                by_tile = { -- revert back to tile which was there before current painting action
+                                    x = by_tile.x,
+                                    y = by_tile.y,
+                                    sprite_col = by_tile.sprite_col,
+                                    sprite_row = by_tile.sprite_row
+                                }
+                                self:renderTile(tile_chunk.x, tile_chunk.y)
                             end)
                         else
                             -- tile position did not exist so create entirely
@@ -754,15 +803,12 @@ function world:paintTilesOntoMap(touch)
                                 -- delete again on undo because tile did not exist before
                                 self.room_tiles[#self.room_tiles] = nil
                                 self.layer_stack[self.layer_selected].room_tiles = nil
-                                self:renderChunk(tile_chunk.x, tile_chunk.y)
+                                self:renderTile(tile_chunk.x, tile_chunk.y)
                             end)
                         end
                         
                         -- re-render chunk to which this tile belongs
-                        
-                        self:renderChunk(tile_chunk.y, tile_chunk.y)
-                        
-                        --coroutine.yield()
+                        self:renderTile(tile_chunk.y, tile_chunk.y)
                     end)
                 end
                 
@@ -806,12 +852,16 @@ end
 
 
 function world:undoPaintAction()
-    exec(self.room_action_queue, function() -- run on separate thread
-        local latest = #self.room_undos
-        self.room_undos[latest]() -- run reverse action
-        table.remove(self.room_undos, latest)
-    end)
+    local latest = #self.room_undos
+
+    for _, func in ipairs(self.room_undos[latest]]) do -- loop over the batch of routines
+        exec(self.room_action_queue, func) -- run reverse action on separate thread
+    end
+
+    exec(self.room_action_queue, table.remove, self.room_undos, latest)
 end
+
+
 
 
 
@@ -1051,7 +1101,7 @@ function world:drawMapWindow()
         fill(paint.orange)
     end
     
-    --rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
+    rect(0, HEIGHT - self.title_bar_height, WIDTH, self.title_bar_height)
     
     fill(paint.white)
     
@@ -1899,8 +1949,8 @@ function world:draw()
     
     if self.debug then
         self:drawMapWindow()
-        --self:drawLayerWindow()
-        --self:drawAtlasWindow()
+        self:drawLayerWindow()
+        self:drawAtlasWindow()
         
         if self.alert then
             self.alert:draw()
@@ -1983,7 +2033,7 @@ end
 
 
 
--- This is the base class for any layer entity
+-- This is the base class for any object on a layer
 -- inherit from it and extend to meet your needs
 
 
@@ -1991,16 +2041,19 @@ WorldEntity = class()
 
 
 function WorldEntity:init(x, y, width, height, texture)
+    self.x = x or 0
+    self.y = y or 0
+
     self.sprite = GSprite{
         texture = texture,
         spritesize = vec2(width, height),
-        position = vec2(x, y)
+        position = vec2() -- default for a WorldEntity
     }
 end
 
 
 function WorldEntity:draw()
-    --self.sprite.texture = world.atlas_texture
+    --self.sprite.texture = world.atlas_texture -- TODO check if this is a reference and will update on change or not
     self.sprite:draw()
 end
 
@@ -2015,10 +2068,12 @@ function WorldEntity:touched(touch)
     local bottom = self.position.y - shift_y
     local right = self.position.x + rem_x
     local top = self.position.y + rem_y
+
+    local world_touch_x, world_touch_y = self:getWorldPosition(touch.x, touch.y)
     
     
-    if touch.x > left and touch.x < right
-    and touch.y > bottom and touch.y < top
+    if world_touch_x > left and world_touch_x < right
+    and world_touch_y > bottom and world_touch_y < top
     then
         return true
     end
