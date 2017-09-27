@@ -256,6 +256,8 @@ end
 
 
 
+
+
 -- Center camera pivot inside available screen space
 
 function world:centerCameraPivot()
@@ -1945,7 +1947,8 @@ function world:draw()
     background(self.bg_color)
     noSmooth()
     
-    updateThreadQueue(self.room_tasks)
+    updateThreadQueue(self.room_action_queue)
+    updateThreadQueue(self.room_render_queue)
     
     if self.debug then
         self:drawMapWindow()

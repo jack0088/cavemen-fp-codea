@@ -50,6 +50,12 @@ function setup()
             end
         end
     end
+
+
+    -- TODO shift this code into :loadRoom() method
+    for _, chunk in ipairs(world:getVisibleChunkIndexPositions()) do
+        world:renderChunk(chunk.x, chunk.y)
+    end
 end
 
 

@@ -962,6 +962,8 @@ do
     
     
     function updateThreadQueue(thread) -- run this on each frame e.g. draw()
+        assert(thread, "Target coroutine thread could not be found!")
+
         if thread and #thread > 0 then -- assert siliently
             if coroutine.status(thread[1]) == "dead" then
                 table.remove(thread, 1)
@@ -974,6 +976,7 @@ do
     
     function exec(thread, func, ...)
         assert(thread, "Target coroutine thread could not be found!")
+
         local params = {...}
         local routine = function() func(unpack(params)) end
         table.insert(thread, coroutine.create(routine))
@@ -981,6 +984,8 @@ do
     
     
     function wait(thread, time)
+        assert(thread, "Target coroutine thread could not be found!")
+
         exec(thread, function() -- run on thread
             local term = ElapsedTime + time
             while ElapsedTime <= term do
@@ -1177,7 +1182,7 @@ function GSprite(params)
     quad.pivot = quad.pivot or vec2()
     quad.current_frame = 1
     quad.fps = quad.fps or 24
-    quad.loop = booleanOrDefaultBoolean(quad.loop, true)
+    quad.loop = defaultBoolean(quad.loop, true)
     quad:addRect(0, 0, 0, 0)
     
     function quad.draw(self)
