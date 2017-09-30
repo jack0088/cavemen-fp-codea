@@ -307,8 +307,8 @@ end
 -- When checkin if the whole shape is visisble, you could pass all (four) corners to this method and see if any is on screen 
 
 function world:getScreenPosition(world_x, world_y)
-    local pnt_x = world_x * self.camera_zoom_x - self.camera_x + WIDTH * self.camera_pivot_x
-    local pnt_y = HEIGHT * self.camera_pivot_y - world_y * self.camera_zoom_y + self.camera_y
+    local pnt_x = world_x * self.camera_zoom_x + self.camera_x + WIDTH * self.camera_pivot_x
+    local pnt_y = world_y * self.camera_zoom_y + self.camera_y + HEIGHT * self.camera_pivot_y
     local is_inside = pnt_x >= 0 and pnt_x <= WIDTH and pnt_y >= 0 and pnt_y <= HEIGHT
     return
         pnt_x,
@@ -405,6 +405,41 @@ function world:isPointInsideChunk(pnt_x, pnt_y, chunk_x, chunk_y) -- compare bot
 
     return false
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:tileWorldPositionAlreadyTaken(index_x, index_y)
+    for layer_id, layer_object in ipairs(self.layer_stack) do
+        for _, tile_reference in ipairs(layer_object.room_tiles) do
+            if self.room_tiles[tile_reference].x == index_x
+            and self.room_tiles[tile_reference].y == index_y
+            then
+                return
+                    true,
+                    self.room_tiles[tile_reference] -- also return the find
+            end
+        end
+    end
+    return false
+end
+
+
 
 
 
@@ -667,43 +702,142 @@ end
 
 
 
-function world:renderChunk(world_x, world_y) -- (re-)render chunk at given world position
+function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or tile entity at given world position and layers
     
-    for layer_id = #self.layer_stack, 1, -1 do -- loop layers in reverse because of drawing order
-        local layer_object = self.layer_stack[layer_id]
+    -- loop layers in reverse because of drawing order
+    
+    for layer_id = #layers, 1, -1 do
+        local layer_object = layers[layer_id]
         local layer_name = layer_object.layer_button.title
-        local layer_class = WorldEntity -- default!
-        local layer_merge = true -- default!
-
-        if layer_object.visibillity_toggle.value == layer_object.visibility_toggle.max then
-            for _, room_tile_id in ipairs(layer_object.layer_button.room_tiles) do
-                local room_tile = self.room_tiles[room_tile_id]
-                
-                -- check each tile on current layer to see if it overlaps the current chunk
-
-                if self:isPointInsideChunk(room_tile.x, room_tile.y, world_x, world_y) -- bottom left
-                or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y, world_x, world_y) -- bottom right
-                or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y + self.tile_height, world_x, world_y) -- top right
-                or self:isPointInsideChunk(room_tile.x, room_tile.y + self.tile_height, world_x, world_y) -- top left
-                then
-                    -- override default layer setting if any
-
-                    for _, setting in ipairs(self.layer_settings) do
-                        if setting.layer_name = layer_name then
-                            layer_class = setting.class or layer_class
-                            layer_merge = setting.merge or layer_merge
-                            break
-                        end
+        local layer_merge = true
+        local canvas_width = self.tile_width * self.chunk_width
+        local canvas_height = self.tile_height * self.chunk_height
+        
+        
+        if layer_object.visibility_toggle.value == layer_object.visibility_toggle.max then
+            
+            -- customize layer settings if any
+            
+            for _, setting in ipairs(self.layer_settings) do
+                if setting.layer_name == layer_name then
+                    layer_merge = defaultBoolean(setting.merge, layer_merge)
+                    if not layer_merge then
+                        canvas_width = self.tile_width
+                        canvas_height = self.tile_height
                     end
-
-
-                    --draw onto canvas
+                    break
                 end
             end
-        end
-    end
-
+            
+            -- pre-define a room_entity object
+            -- remember layer_merge is false by default so we will setup everything for a chunk
+            
+            local entity = WorldEntity(world_x, world_y, 1, 1)
+            entity.sprite.texture = image(canvas_width, canvas_height)
+            entity.sprite.tilesize = vec2(canvas_width, canvas_height)
+            entity.sprite.spritesize = vec2(canvas_width, canvas_height)
+            
+            local entity_template = {
+                entity_object = entity,
+                chunk_information = { -- this is just for identification when re-rendering chunks
+                    x = world_x,
+                    y = world_y
+                }
+            }
+            
+            -- loop on layer room_tiles and see which ones belong to this chunk
+            
+            setContext(entity_template.entity_object.sprite.texture)
+            
+            for _, room_tile_id in ipairs(layer_object.room_tiles) do
+                local room_tile = self.room_tiles[room_tile_id]
+                
+                if layer_merge then
+                    -- check each tile's corner on current layer to see if it overlaps the current chunk
+                    if self:isPointInsideChunk(room_tile.x, room_tile.y, world_x, world_y) -- bottom left
+                    or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y, world_x, world_y) -- bottom right
+                    or self:isPointInsideChunk(room_tile.x + self.tile_width, room_tile.y + self.tile_height, world_x, world_y) -- top right
+                    or self:isPointInsideChunk(room_tile.x, room_tile.y + self.tile_height, world_x, world_y) -- top left
+                    then
+                        -- paint the tile onto the chunk texture
+                        local tile_sprite = WorldEntity(room_tile.x - world_x, room_tile.y - world_y, room_tile.sprite_col, room_tile.sprite_row)
+                        tile_sprite:draw()
+                    end
+                else
+                    -- oh well, seems like each tile is its own entity, so re-adjust the entity template
+                    
+                    entity_template.entity_object.sprite.texture = self.atlas_texture
+                    entity_template.entity_object.sprite.tilesize = vec2(self.tile_width, self.tile_height)
+                    entity_template.entity_object.sprite.spritesize = vec2(self.tile_width, self.tile_height)
+                    entity_template.entity_object.sprite.animations.default = {vec2(room_tile.sprite_col, room_tile.sprite_row)}
+                    
+                    print("separate tiles as own entities")
+                end
+            end -- layer room_tiles loop
+            
+            setContext()
+            
+            
+            -- save the room_entity
+            
+            if layer_merge then
+                local stack_pos = #self.room_entities + 1
+                
+                for i, e in ipairs(self.room_entities) do
+                    if e.chunk_information.x == world_x
+                    and e.chunk_information.y == world_y
+                    then
+                        stack_pos = i
+                        table.remove(self.room_entities, stack_pos)
+                        break
+                    end
+                end
+                
+                table.insert(self.room_entities, stack_pos, entity_template)
+            end
+            
+        end -- layer visibility check
+        
+        coroutine.yield()
+        
+    end -- layer loop
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:drawEntities()
+    pushMatrix()
+    translate(self.camera_pivot_x * WIDTH, self.camera_pivot_y * HEIGHT)
+    translate(self.camera_x, self.camera_y)
+    scale(self.camera_zoom_x, self.camera_zoom_y)
+    
+    for _, entity in ipairs(self.room_entities) do
+        entity.entity_object:draw()
+    end
+    
+    popMatrix()
+end
+
+
+
 
 
 
@@ -750,8 +884,14 @@ function world:paintTilesOntoMap(touch)
     and (not self.paint_tile
     or self.paint_tile ~= curr_tile)
     then
+        local tile_width = self.tile_width
+        local tile_height = self.tile_height
+        local chunk_width = tile_width * self.chunk_width
+        local chunk_height = tile_height * self.chunk_height
         
         local undo_batch = {}
+        local curr_layer = self.layer_stack[self.layer_selected]
+        
         
         -- unwrap brush into single tiles
         
@@ -762,60 +902,61 @@ function world:paintTilesOntoMap(touch)
                 
                 local tile_template = {
                     -- world position of the tile
-                    x = curr_tile.x + x,
-                    y = curr_tile.y - y,
-                    -- self.atlas_texture index position
-                    sprite_col = self.brush_x + x,
-                    sprite_row = self.brush_y + y
+                    x = (curr_tile.x + x) * tile_width,
+                    y = (curr_tile.y - y) * tile_height,
+                    -- self.atlas_texture brush position (beginning off 1,1)
+                    sprite_col = (self.brush_x + x) + 1,
+                    sprite_row = (self.brush_y + y) + 1
                 }
                 
                 -- check current layer to see wether painted tile position already exist in self.room_tiles
                 
-                local tile_chunk = vec2(self:getChunkWorldIndexPosition(tile_template.x, tile_template.y)) -- to which this tile belongs
+                local tile_screen_pos = vec2(self:getScreenPosition(tile_template.x, tile_template.y))
+                local parent_chunk = vec2(self:getChunkWorldIndexPosition(tile_screen_pos.x, tile_screen_pos.y)) -- to which this tile belongs
+                local chunk_world_pos = vec2(parent_chunk.x * chunk_width, parent_chunk.y * chunk_height)
                 local position_taken, by_tile = self:tileWorldPositionAlreadyTaken(tile_template.x, tile_template.y)
                 
+                
                 if not position_taken -- tile not exist yet?
-                or (by_tile.sprite_col ~= tile_template.sprite_col -- or exists but is different tile
-                and by_tile.sprite_row ~= tile_template.sprite_row)
+                or by_tile.sprite_col ~= tile_template.sprite_col -- or exists but is different tile
+                or by_tile.sprite_row ~= tile_template.sprite_row
                 then
                     -- create new coroutine thread to register and render tile
-                    
-                    exec(self.room_action_queue, function()
-                        if by_tile then
-                            -- tile position already existed so just re-assign/update
-                            by_tile = tile_template
-                            
-                            -- cache undo action for this tile
-                            table.insert(undo_batch, function()
-                                by_tile = { -- revert back to tile which was there before current painting action
-                                    x = by_tile.x,
-                                    y = by_tile.y,
-                                    sprite_col = by_tile.sprite_col,
-                                    sprite_row = by_tile.sprite_row
-                                }
-                                self:renderTile(tile_chunk.x, tile_chunk.y)
-                            end)
-                        else
-                            -- tile position did not exist so create entirely
-                            table.insert(self.room_tiles, tile_template)
-                            table.insert(self.layer_stack[self.layer_selected].room_tiles, #self.room_tiles)
-                            
-                            -- cache undo action for this tile
-                            table.insert(undo_batch, function()
-                                -- delete again on undo because tile did not exist before
-                                self.room_tiles[#self.room_tiles] = nil
-                                self.layer_stack[self.layer_selected].room_tiles = nil
-                                self:renderTile(tile_chunk.x, tile_chunk.y)
-                            end)
-                        end
+                    if by_tile then
+                        -- tile position already existed so just re-assign/update
+                        by_tile.sprite_col = tile_template.sprite_col
+                        by_tile.sprite_row = tile_template.sprite_row
                         
-                        -- re-render chunk to which this tile belongs
-                        self:renderTile(tile_chunk.y, tile_chunk.y)
-                    end)
+                        -- cache undo action for this tile
+                        table.insert(undo_batch, function()
+                            -- revert back to tile which was there before current painting action
+                            by_tile.x = by_tile.x
+                            by_tile.y = by_tile.y
+                            by_tile.sprite_col = by_tile.sprite_col
+                            by_tile.sprite_row = by_tile.sprite_row
+                            self:renderChunk(chunk_world_pos.x, chunk_world_pos.y, {curr_layer})
+                        end)
+                    else
+                        -- tile position did not exist so create entirely
+                        table.insert(self.room_tiles, tile_template)
+                        table.insert(self.layer_stack[self.layer_selected].room_tiles, #self.room_tiles)
+                        
+                        -- cache undo action for this tile
+                        table.insert(undo_batch, function()
+                            -- delete again on undo because tile did not exist before
+                            self.room_tiles[#self.room_tiles] = nil
+                            self.layer_stack[self.layer_selected].room_tiles = nil
+                            self:renderChunk(chunk_world_pos.x, chunk_world_pos.y, {curr_layer})
+                        end)
+                    end
+                    
+                    -- re-render chunk to which this tile belongs
+                    exec(self.room_action_queue, self.renderChunk, self, chunk_world_pos.x, chunk_world_pos.y, {curr_layer})
                 end
                 
             end
         end
+        
         
         -- register an undo after painting action finished completely
         
@@ -856,7 +997,7 @@ end
 function world:undoPaintAction()
     local latest = #self.room_undos
 
-    for _, func in ipairs(self.room_undos[latest]]) do -- loop over the batch of routines
+    for _, func in ipairs(self.room_undos[latest]) do -- loop over the batch of routines
         exec(self.room_action_queue, func) -- run reverse action on separate thread
     end
 
@@ -882,34 +1023,6 @@ function world:removeUndoOverflow() -- forget undos that are too old
     end
 end
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function world:tileWorldPositionAlreadyTaken(index_x, index_y)
-    for layer_id, layer_object in ipairs(self.layer_stack) do
-        for _, tile_reference in ipairs(layer_object.room_tiles) do
-            if self.room_tiles[tile_reference].x == index_x
-            and self.room_tiles[tile_reference].y == index_y
-            then
-                return
-                    true,
-                    self.room_tiles[tile_reference] -- also return the find
-            end
-        end
-    end
-    return false
-end
 
 
 
@@ -1065,19 +1178,11 @@ function world:drawMapWindow()
     local viewport_cx = self.camera_pivot_x * WIDTH
     local viewport_cy = self.camera_pivot_y * HEIGHT
     
-    self:centerCameraPivot()
     
     pushStyle()
     pushMatrix()
     font("HelveticaNeue-Light")
     fontSize(18)
-    
-    translate(viewport_cx, viewport_cy)
-    translate(self.camera_x, self.camera_y)
-    scale(self.camera_zoom_x, self.camera_zoom_y)
-    
-    
-    -- TODO draw chunks and tiles here
     
     
     -- draw grid
@@ -1162,14 +1267,14 @@ function world:drawAtlasWindow()
             spriteMode(CORNER)
             sprite(self.atlas_texture)
             
-            -- brush
-            resetMatrix()
-            self:drawAtlasBrush()
-        
             -- grid
             resetMatrix()
             translate(0, window_height - self.title_bar_height)
             self:drawAtlasGrid()
+            
+            -- brush
+            resetMatrix()
+            self:drawAtlasBrush()
         clip()
         popMatrix()
     end
@@ -1950,6 +2055,10 @@ function world:draw()
     updateThreadQueue(self.room_action_queue)
     updateThreadQueue(self.room_render_queue)
     
+    self:centerCameraPivot()
+    
+    self:drawEntities()
+    
     if self.debug then
         self:drawMapWindow()
         self:drawLayerWindow()
@@ -2007,10 +2116,6 @@ function world:touched(touch)
         
         if touch.state == ENDED then
             sound(world.sfx_mouse_click)
-            
-            print()
-            printf(self:getVisibleChunkIndexPositions())
-            print()
         end
         
     end
@@ -2043,20 +2148,19 @@ end
 WorldEntity = class()
 
 
-function WorldEntity:init(x, y, width, height, texture)
-    self.x = x or 0
-    self.y = y or 0
-
+function WorldEntity:init(x, y, sprite_col, sprite_row)
     self.sprite = GSprite{
-        texture = texture,
-        spritesize = vec2(width, height),
-        position = vec2() -- default for a WorldEntity
+        texture = world.atlas_texture,
+        tilesize = vec2(world.tile_width, world.tile_height),
+        spritesize = vec2(world.tile_width, world.tile_height),
+        position = vec2(x, y),
+        animations = {default = {vec2(sprite_col, sprite_row)}},
+        current_animation = "default"
     }
 end
 
 
 function WorldEntity:draw()
-    --self.sprite.texture = world.atlas_texture -- TODO check if this is a reference and will update on change or not
     self.sprite:draw()
 end
 

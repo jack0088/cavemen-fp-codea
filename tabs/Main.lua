@@ -4,7 +4,7 @@
 -- (c) 2017 kontakt@herrsch.de
 
 
-displayMode(OVERLAY)
+displayMode(FULLSCREEN)
 supportedOrientations(ANY)
 
 
@@ -18,10 +18,12 @@ function setup()
     display = mesh()
     display.texture = image(size, size)
     display:addRect(size/2, size/2, size, size)
+    --[[
     display.shader = shader("Documents:scanlines")
     display.shader.opacity = .25
     display.shader.margin = 3
     display.shader.size = 1
+    --]]
     
     
     btn_world_debug = UIButton("Edit", 0, 0, 72, 32)
@@ -53,9 +55,9 @@ function setup()
 
 
     -- TODO shift this code into :loadRoom() method
-    for _, chunk in ipairs(world:getVisibleChunkIndexPositions()) do
-        world:renderChunk(chunk.x, chunk.y)
-    end
+    --for _, chunk in ipairs(world:getVisibleChunkIndexPositions()) do
+        --world:renderChunk(world.tile_width * world.chunk_width * chunk.x, world.tile_height * world.chunk_height * chunk.y, world.layer_stack)
+    --end
 end
 
 
@@ -90,6 +92,8 @@ function draw()
     
     display:draw()
     debugger(1, 0)
+
+    rect(0, HEIGHT/2, 10, 10)
 end
 
 
@@ -102,5 +106,6 @@ end
 function touched(touch)
     btn_world_debug:touched(touch)
     world:touched(touch)
+    
 end
 
