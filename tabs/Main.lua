@@ -14,15 +14,16 @@ supportedOrientations(ANY)
 
 
 function setup()
+    --[[
     local size = math.max(WIDTH, HEIGHT)
     display = mesh()
     display.texture = image(size, size)
     display:addRect(size/2, size/2, size, size)
-    --[[
+    ---[[
     display.shader = shader("Documents:scanlines")
-    display.shader.opacity = .25
-    display.shader.margin = 3
     display.shader.size = 1
+    display.shader.margin = 3
+    display.shader.opacity = .25
     --]]
     
     
@@ -53,11 +54,6 @@ function setup()
         end
     end
 
-
-    -- TODO shift this code into :loadRoom() method
-    --for _, chunk in ipairs(world:getVisibleChunkIndexPositions()) do
-        --world:renderChunk(world.tile_width * world.chunk_width * chunk.x, world.tile_height * world.chunk_height * chunk.y, world.layer_stack)
-    --end
 end
 
 
@@ -84,16 +80,18 @@ function draw()
     btn_world_debug.is_active = world.debug
     btn_world_debug.title = btn_world_debug.is_active and "Exit" or "Edit"
     
-    setContext(display.texture)
-        background(paint.black)
-        world:draw()
-        btn_world_debug:draw()
-    setContext()
+    --setContext(display.texture) -- NOTE this cause flickering issues when rendering chunks because inside that method setContext is also used
     
-    display:draw()
+    background(paint.black)
+    world:draw()
+    btn_world_debug:draw()
+    
+    --setContext()
+    
+    --display:draw()
+    
     debugger(1, 0)
-
-    rect(0, HEIGHT/2, 10, 10)
+    
 end
 
 

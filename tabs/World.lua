@@ -264,15 +264,12 @@ function world:centerCameraPivot()
     if self.debug then
         local layer_window = WIDTH * self.layer_window_width
         local atlas_window = HEIGHT * self.atlas_window_height
-        
         self.camera_pivot_x = (WIDTH - layer_window) / WIDTH*.5
         self.camera_pivot_y = (HEIGHT - self.title_bar_height - atlas_window) / HEIGHT*.5 + atlas_window / HEIGHT
-        
-        return
+    else
+        self.camera_pivot_x = .5
+        self.camera_pivot_y = .5
     end
-    
-    self.camera_pivot_x = .5
-    self.camera_pivot_y = .5
 end
 
 
@@ -729,9 +726,9 @@ function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or til
                 end
             end
             
+            
             -- pre-define a room_entity object
             -- remember layer_merge is false by default so we will setup everything for a chunk
-            
             local entity = WorldEntity(world_x, world_y, 1, 1)
             entity.sprite.texture = image(canvas_width, canvas_height)
             entity.sprite.tilesize = vec2(canvas_width, canvas_height)
@@ -744,6 +741,7 @@ function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or til
                     y = world_y
                 }
             }
+            
             
             -- loop on layer room_tiles and see which ones belong to this chunk
             
@@ -797,6 +795,7 @@ function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or til
             end
             
         end -- layer visibility check
+        
         
         coroutine.yield()
         
@@ -2048,12 +2047,12 @@ end
 -- Combine every part and draw the world (and editor if needed)
 
 function world:draw()
+    updateThreadQueue(self.room_action_queue)
+    updateThreadQueue(self.room_render_queue)
+    
     pushStyle()
     background(self.bg_color)
     noSmooth()
-    
-    updateThreadQueue(self.room_action_queue)
-    updateThreadQueue(self.room_render_queue)
     
     self:centerCameraPivot()
     
@@ -2091,9 +2090,6 @@ function world:touched(touch)
         end
         
         
-        self:resetCameraPosition(touch)
-        self:minimizeAtlasWindow(touch)
-        
         self.btn_layer_create:touched(touch)
         self.btn_layer_delete:touched(touch)
         self.btn_layer_sort_front:touched(touch)
@@ -2107,6 +2103,8 @@ function world:touched(touch)
                         self:panAtlasWindow(touch)
                         self:moveAtlasBrush(touch)
                     end
+                    self:resetCameraPosition(touch)
+                    self:minimizeAtlasWindow(touch)
                     self:scrollLayerWindow(touch)
                     self:touchSingleLayer(touch)
                 end

@@ -963,7 +963,7 @@ do
     
     function updateThreadQueue(thread) -- run this on each frame e.g. draw()
         assert(thread, "Target coroutine thread could not be found!")
-
+        
         if thread and #thread > 0 then -- assert siliently
             if coroutine.status(thread[1]) == "dead" then
                 table.remove(thread, 1)
