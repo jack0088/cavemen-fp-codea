@@ -488,13 +488,12 @@ end
 
 
 function world:getTileIndicesEclosedByBrushBounds()
-    local counter_offset = 1 -- to count tiles from 0 upwards (like pico-8 does) set this value to 0
     local cols = self.atlas_texture.width / self.tile_width
     local indices = {}
     
     for y = self.brush_y, self.brush_y + self.brush_height - 1 do
         for x = self.brush_x, self.brush_x + self.brush_width - 1 do
-            table.insert(indices, math.tointeger(cols * y + x + counter_offset))
+            table.insert(indices, math.tointeger(cols * y + x + 1))
         end
     end
     
@@ -705,6 +704,12 @@ end
 
 
 
+
+
+-- TODO make self.room_entities support multiple layers
+-- TODO shift layer settings loop to another place? (because we have to rethink how rendering works for dynamic entities which have a class and are not merged)
+
+
 function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or tile entity at given world position and layers
     
     -- loop layers in reverse because of drawing order
@@ -836,6 +841,8 @@ function world:drawEntities()
     
     for _, entity in ipairs(self.room_entities) do
         entity.entity_object:draw()
+
+        -- TODO remove chunks that are out of the visible screen bounds
     end
     
     popMatrix()
@@ -1180,21 +1187,21 @@ end
 
 
 function world:drawMapWindow()
+
     local viewport_cx = self.camera_pivot_x * WIDTH
     local viewport_cy = self.camera_pivot_y * HEIGHT
-    
     
     pushStyle()
     pushMatrix()
     font("HelveticaNeue-Light")
     fontSize(18)
     
-    
+
     -- draw grid
     resetMatrix()
     self:drawMapGrid()
     
-    
+
     do -- display current camera center position
         local r = 4 -- radius
         noFill()
@@ -1221,8 +1228,8 @@ function world:drawMapWindow()
         fill(paint.black)
     end
     
-    -- tile position at which the camera curretnly is
-    
+
+    -- indicator at which tile position the camera currently is
     local offset_x, offset_y = self:getTileWorldIndexPosition(viewport_cx, viewport_cy)
     text(string.format("position %.0f, %.0f", offset_x, offset_y), WIDTH/2, HEIGHT - self.title_bar_height/2)
     
@@ -1346,8 +1353,9 @@ function world:drawAtlasWindow()
         and self.layer_stack[self.layer_selected].visibility_toggle.value < self.layer_stack[self.layer_selected].visibility_toggle.max)
         then
             pushMatrix()
-            local angle = 500 * ElapsedTime
             translate(WIDTH - w - 32, window_height - self.title_bar_height/2)
+
+            local angle = 500 * ElapsedTime
             
             if #self.room_action_queue > 0 then -- rotate when executing tasks otherwise just blink
                 rotate(-angle)
@@ -1679,6 +1687,7 @@ function world:scrollLayerWindow(touch)
         
         return true
     end
+    
     return false
 end
 
