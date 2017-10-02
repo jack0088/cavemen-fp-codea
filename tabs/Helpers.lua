@@ -1,22 +1,17 @@
 
--- Global Helpers (latest update 10.09.2017)
--- Collection of useful functions and Codea extensions
-
-
-
 -- TODO finish and then include GIF89a parser here too
 -- TODO change all colors in this class to use paint[color] variable
 
 
 
 
+-- Global Helpers (latest update 10.09.2017)
+-- Collection of useful functions and Codea extensions
 
 
 
 
-
-
--- pallet of colors
+-- pallet of frequently used colors
 
 paint = {
     transparent = color(0, 0),
@@ -75,6 +70,8 @@ function debugger(pivotX, pivotY) -- in range of [0-1]
     
     popStyle()
 end
+
+
 
 
 

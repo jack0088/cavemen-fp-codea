@@ -1,6 +1,7 @@
--- Cavemen FP
--- 8-bit roguelike, rpg and adventure level editor and developer tools
--- Version 0.4
+
+-- Cavemen FP is an 8-bit roguelike rpg adventure game
+-- this projects also includes a ton of developer tools like the world tilemap editor
+-- Version 0.42
 -- (c) 2017 kontakt@herrsch.de
 
 

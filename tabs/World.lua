@@ -1,7 +1,13 @@
 
+
+-- TODO make world table into World class (some methods must be tested, because of direct world[prop] referecnes)
+
+
+
+
+
 -- This is the world object with all its related methods and routines
 -- it handles loading, displaying and editing rooms and a ton of other stuff
-
 
 world = {}
 
@@ -1605,6 +1611,8 @@ end
 
 
 
+
+
 function world:touchSingleLayer(touch)
     if touch.x > WIDTH - WIDTH * self.layer_window_width
     and touch.y > HEIGHT * self.atlas_window_height + self.layer_item_height + 4
@@ -1643,6 +1651,10 @@ end
 
 
 
+
+
+
+
 function world:scrollLayerWindow(touch)
     local atlas_window = HEIGHT * self.atlas_window_height
     local layer_window = WIDTH * self.layer_window_width
@@ -1669,6 +1681,7 @@ function world:scrollLayerWindow(touch)
     end
     return false
 end
+
 
 
 
@@ -1732,6 +1745,8 @@ end
 
 
 
+
+
 function world:drawLayerWindow()
     local window_width = WIDTH * self.layer_window_width
     local atlas_window = HEIGHT * self.atlas_window_height
@@ -1750,6 +1765,8 @@ function world:drawLayerWindow()
     
     popStyle()
 end
+
+
 
 
 
@@ -1805,6 +1822,9 @@ function world:resizeAtlasWindow(touch)
     
     return false
 end
+
+
+
 
 
 
@@ -1901,6 +1921,9 @@ end
 
 
 
+
+
+
 function world:moveAtlasBrush(touch)
     if touch.state == ENDED
     -- just tapped?
@@ -1920,6 +1943,8 @@ function world:moveAtlasBrush(touch)
     
     return false
 end
+
+
 
 
 
@@ -1994,6 +2019,8 @@ end
 
 
 
+
+
 function world:resetCameraPosition(touch)
     if touch.state == ENDED
     and touch.initY > HEIGHT - self.title_bar_height
@@ -2044,6 +2071,9 @@ end
 
 
 
+
+
+
 -- Combine every part and draw the world (and editor if needed)
 
 function world:draw()
@@ -2070,6 +2100,9 @@ function world:draw()
     
     popStyle()
 end
+
+
+
 
 
 
@@ -2140,10 +2173,11 @@ end
 
 
 -- This is the base class for any object on a layer
--- inherit from it and extend to meet your needs
+-- inherit from this class and extend it to meet your requirements for an entity
 
 
 WorldEntity = class()
+
 
 
 function WorldEntity:init(x, y, sprite_col, sprite_row)
@@ -2158,9 +2192,18 @@ function WorldEntity:init(x, y, sprite_col, sprite_row)
 end
 
 
+
+
+
+
 function WorldEntity:draw()
     self.sprite:draw()
 end
+
+
+
+
+
 
 
 function WorldEntity:touched(touch)
