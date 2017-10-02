@@ -14,19 +14,6 @@ supportedOrientations(ANY)
 
 
 function setup()
-    --[[
-    local size = math.max(WIDTH, HEIGHT)
-    display = mesh()
-    display.texture = image(size, size)
-    display:addRect(size/2, size/2, size, size)
-    ---[[
-    display.shader = shader("Documents:scanlines")
-    display.shader.size = 1
-    display.shader.margin = 3
-    display.shader.opacity = .25
-    --]]
-    
-    
     btn_world_debug = UIButton("Edit", 0, 0, 72, 32)
     btn_world_debug.text_color = paint.black
     btn_world_debug.bg_color = paint.blue
@@ -80,18 +67,17 @@ function draw()
     btn_world_debug.is_active = world.debug
     btn_world_debug.title = btn_world_debug.is_active and "Exit" or "Edit"
     
-    --setContext(display.texture) -- NOTE this cause flickering issues when rendering chunks because inside that method setContext is also used
-    
     background(paint.black)
     world:draw()
     btn_world_debug:draw()
     
-    --setContext()
-    
-    --display:draw()
-    
     debugger(1, 0)
     
+    blendMode(MULTIPLY)
+    tint(255, 200)
+    spriteMode(CORNER)
+    sprite("Dropbox:rgb_pattern")
+    blendMode(NORMAL)
 end
 
 
