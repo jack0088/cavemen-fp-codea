@@ -74,11 +74,13 @@ function draw()
     
     debugger(1, 0)
     
+    pushStyle()
     blendMode(MULTIPLY)
     tint(255, 200)
     spriteMode(CORNER)
-    sprite("Dropbox:rgb_pattern")
+    --sprite("Dropbox:rgb_pattern")
     blendMode(NORMAL)
+    popStyle()
 end
 
 

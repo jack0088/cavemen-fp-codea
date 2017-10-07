@@ -427,19 +427,45 @@ end
 
 
 
-function world:tileWorldPositionAlreadyTaken(index_x, index_y)
-    for layer_id, layer_object in ipairs(self.layer_stack) do
-        for _, tile_reference in ipairs(layer_object.room_tiles) do
-            if self.room_tiles[tile_reference].x == index_x
-            and self.room_tiles[tile_reference].y == index_y
-            then
-                return
-                    true,
-                    self.room_tiles[tile_reference] -- also return the find
-            end
+function world:tileWorldPositionAlreadyTaken(index_x, index_y, layer)
+    layer = layer or self.layer_stack[self.layer_selected]
+    
+    for _, tile_reference in ipairs(layer.room_tiles) do
+        if self.room_tiles[tile_reference].x == index_x
+        and self.room_tiles[tile_reference].y == index_y
+        then
+            return
+                true,
+                self.room_tiles[tile_reference] -- also return the find
         end
     end
+    
     return false
+end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function world:getLayerObjectByName(layer_name)
+    for layer_id, layer_object in ipairs(self.layer_stack) do
+        if layer_object.layer_button.title == layer_name then
+            return
+                layer_object,
+                layer_id
+        end
+    end
 end
 
 
@@ -706,8 +732,6 @@ end
 
 
 
--- TODO make self.room_entities support multiple layers
--- TODO shift layer settings loop to another place? (because we have to rethink how rendering works for dynamic entities which have a class and are not merged)
 
 
 function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or tile entity at given world position and layers
@@ -747,7 +771,8 @@ function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or til
             
             local entity_template = {
                 entity_object = entity,
-                chunk_information = { -- this is just for identification when re-rendering chunks
+                chunk_information = { -- this is just for identification when re-rendering
+                    layer_name = layer_name,
                     x = world_x,
                     y = world_y
                 }
@@ -795,6 +820,7 @@ function world:renderChunk(world_x, world_y, layers) -- (re-)render chunk or til
                 for i, e in ipairs(self.room_entities) do
                     if e.chunk_information.x == world_x
                     and e.chunk_information.y == world_y
+                    and e.chunk_information.layer_name == layer_name
                     then
                         stack_pos = i
                         table.remove(self.room_entities, stack_pos)
@@ -840,9 +866,15 @@ function world:drawEntities()
     scale(self.camera_zoom_x, self.camera_zoom_y)
     
     for _, entity in ipairs(self.room_entities) do
-        entity.entity_object:draw()
+        local layer_name = entity.chunk_information.layer_name
+        local layer_object = self:getLayerObjectByName(layer_name)
+        local visibility_toggle = layer_object.visibility_toggle
+        
+        if visibility_toggle.value == visibility_toggle.max then
+            entity.entity_object:draw()
 
-        -- TODO remove chunks that are out of the visible screen bounds
+            -- TODO remove chunks that are out of the visible screen bounds
+        end
     end
     
     popMatrix()
